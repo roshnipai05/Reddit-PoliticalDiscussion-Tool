@@ -31,18 +31,39 @@ MODERATOR_DISTINGUISHED = {"moderator", "admin", "special"}
 MOJIBAKE_HINTS = ("â", "Â", "€", "™")
 WHITESPACE_RE = re.compile(r"\s+")
 DEFAULT_HASH_SALT = "reddit-topic-analysis-v1"
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def resolve_input_path(kind: str, provided: str | None) -> Path:
+    if provided:
+        return Path(provided)
+
+    search_dir = ROOT / "original_data"
+    patterns = [f"*{kind}*.jsonl", f"*{kind}*.json"]
+    matches: list[Path] = []
+    for pattern in patterns:
+        matches.extend(sorted(search_dir.glob(pattern)))
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise FileNotFoundError(
+            f"Could not find a default {kind} file in {search_dir}. Pass --{kind} explicitly."
+        )
+    raise ValueError(
+        f"Found multiple candidate {kind} files in {search_dir}. Pass --{kind} explicitly."
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--posts",
-        default="r_parenting_posts-6-months.jsonl",
+        default=None,
         help="Path to raw posts JSONL.",
     )
     parser.add_argument(
         "--comments",
-        default="r_parenting_comments-6-months.jsonl",
+        default=None,
         help="Path to raw comments JSONL.",
     )
     parser.add_argument(
@@ -127,10 +148,8 @@ def author_hash(author: Any, salt: str) -> str | None:
 def clean_post(raw: dict[str, Any], salt: str, min_text_chars: int) -> tuple[dict[str, Any] | None, str | None]:
     title = normalize_text(raw.get("title"))
     selftext = normalize_text(raw.get("selftext"))
-
-    if is_deleted_text(raw.get("selftext")):
-        return None, "empty_deleted_or_removed_selftext"
-
+    selftext_removed = is_deleted_text(raw.get("selftext"))
+    selftext = "" if selftext_removed else selftext
     combined_text = f"{title}\n\n{selftext}".strip() if selftext else title
     if len(combined_text) < min_text_chars:
         return None, "too_short"
@@ -147,6 +166,7 @@ def clean_post(raw: dict[str, Any], salt: str, min_text_chars: int) -> tuple[dic
         "author_hash": author_hash(raw.get("author"), salt),
         "title": title,
         "selftext": selftext,
+        "selftext_removed_or_deleted": selftext_removed,
         "text": combined_text,
         "link_flair_text": normalize_text(raw.get("link_flair_text")),
         "score": raw.get("score"),
@@ -291,8 +311,8 @@ def write_documents(posts_path: Path, comments_path: Path, out_path: Path) -> Co
 
 def main() -> None:
     args = parse_args()
-    posts_path = Path(args.posts)
-    comments_path = Path(args.comments)
+    posts_path = resolve_input_path("posts", args.posts)
+    comments_path = resolve_input_path("comments", args.comments)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

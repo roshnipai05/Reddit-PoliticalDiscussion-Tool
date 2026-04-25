@@ -1,38 +1,35 @@
 const state = {
   bundle: null,
-  filteredTopics: [],
   activeTopicId: null,
+  expandedMajorTopics: new Set(),
+  zoom: 1,
+  hindiMode: false,
 };
 
 const els = {
   subredditLabel: document.getElementById("subredditLabel"),
   overviewStats: document.getElementById("overviewStats"),
   aggregateGrid: document.getElementById("aggregateGrid"),
-  topicBars: document.getElementById("topicBars"),
   qualityPanel: document.getElementById("qualityPanel"),
-  topicGrid: document.getElementById("topicGrid"),
-  topicInspector: document.getElementById("topicInspector"),
+  topicTree: document.getElementById("topicTree"),
+  topicDetail: document.getElementById("topicDetail"),
   topicCountLabel: document.getElementById("topicCountLabel"),
   searchInput: document.getElementById("searchInput"),
   trendFilter: document.getElementById("trendFilter"),
-  stanceFilter: document.getElementById("stanceFilter"),
   flairFilter: document.getElementById("flairFilter"),
+  dateFilter: document.getElementById("dateFilter"),
+  zoomIn: document.getElementById("zoomIn"),
+  zoomOut: document.getElementById("zoomOut"),
+  zoomLabel: document.getElementById("zoomLabel"),
+  languageToggle: document.getElementById("languageToggle"),
 };
 
 function formatNumber(value) {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 }
 
 function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
-}
-
-function titleCaseTrend(value) {
-  return String(value || "").toLowerCase();
-}
-
-function trendBadgeClass(value) {
-  return titleCaseTrend(value);
 }
 
 function escapeHtml(value) {
@@ -43,404 +40,458 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function initFilters(bundle) {
-  const flairs = new Set();
-  bundle.topics.forEach((topic) => {
-    (topic.top_flairs || []).forEach((item) => flairs.add(item.flair));
-  });
-  [...flairs].sort().forEach((flair) => {
-    const option = document.createElement("option");
-    option.value = flair;
-    option.textContent = flair;
-    els.flairFilter.append(option);
-  });
+function trendClass(value) {
+  return String(value || "").toLowerCase();
 }
 
-function renderOverview(bundle) {
+function getTopicById(topicId) {
+  return state.bundle.topics.find((topic) => Number(topic.topic_id) === Number(topicId));
+}
+
+function currentMonthFilter() {
+  return els.dateFilter.value;
+}
+
+function topicMatchesFilters(topic) {
+  const search = els.searchInput.value.trim().toLowerCase();
+  const trend = els.trendFilter.value;
+  const flair = els.flairFilter.value;
+  const date = currentMonthFilter();
+  const haystack = [
+    topic.label,
+    topic.topic_description,
+    ...(topic.keywords || []),
+    ...((topic.top_flairs || []).map((item) => item.flair)),
+    topic.major_topic,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const matchesSearch = !search || haystack.includes(search);
+  const matchesTrend = trend === "all" || topic.trend_type === trend;
+  const matchesFlair =
+    flair === "all" || (topic.top_flairs || []).some((item) => item.flair === flair);
+  const matchesDate =
+    date === "all" ||
+    (topic.timeline?.months || []).includes(date) ||
+    topic.representative_posts?.some((post) => post.created_month === date);
+  return matchesSearch && matchesTrend && matchesFlair && matchesDate;
+}
+
+function filteredTree() {
+  return state.bundle.topic_tree
+    .map((majorTopic) => ({
+      ...majorTopic,
+      children: majorTopic.children.filter((child) => topicMatchesFilters(getTopicById(child.topic_id))),
+    }))
+    .filter((majorTopic) => majorTopic.children.length > 0);
+}
+
+function renderOverview() {
+  const bundle = state.bundle;
   els.subredditLabel.textContent = `${bundle.app_meta.subreddit} • ${bundle.app_meta.analysis_scope}`;
+
   const cards = [
-    ["Topics", bundle.overview.topic_count],
-    ["Persistent", bundle.overview.persistent_topics],
+    ["Major Topic Groups", bundle.topic_tree.length],
+    ["Model Topics", bundle.overview.topic_count],
     ["Trending", bundle.overview.trending_topics],
-    ["Stance Preview Topics", bundle.overview.stance_preview_topics],
-    ["Posts", bundle.aggregate_stats.total_posts],
-    ["Comments", bundle.aggregate_stats.total_comments],
+    ["Persistent", bundle.overview.persistent_topics],
+    ["Comments Analyzed", bundle.stance_preview_metadata.comment_count_analyzed],
   ];
   els.overviewStats.innerHTML = cards
     .map(
       ([label, value]) => `
-        <div class="stat-box">
+        <article class="metric-card">
           <div class="metric-label">${label}</div>
-          <div class="stat-value">${formatNumber(value)}</div>
-        </div>
+          <div class="metric-value">${formatNumber(value)}</div>
+        </article>
       `
     )
     .join("");
 
   const aggregateCards = [
-    ["Total Posts", formatNumber(bundle.aggregate_stats.total_posts)],
-    ["Unique Users", formatNumber(bundle.aggregate_stats.total_unique_users)],
-    ["Total Comments", formatNumber(bundle.aggregate_stats.total_comments)],
-    ["Total Upvotes", formatNumber(bundle.aggregate_stats.total_upvotes)],
-    ["Date Range", `${bundle.aggregate_stats.date_range_start} to ${bundle.aggregate_stats.date_range_end}`],
+    ["Posts", formatNumber(bundle.aggregate_stats.total_posts)],
+    ["Users", formatNumber(bundle.aggregate_stats.total_unique_users)],
+    ["Comments", formatNumber(bundle.aggregate_stats.total_comments)],
+    ["Upvotes", formatNumber(bundle.aggregate_stats.total_upvotes)],
+    [
+      "Date Span",
+      `${bundle.aggregate_stats.date_range_start} to ${bundle.aggregate_stats.date_range_end}`,
+    ],
   ];
   els.aggregateGrid.innerHTML = aggregateCards
     .map(
       ([label, value]) => `
-        <div class="metric-card">
+        <div class="sidebar-stat">
           <div class="metric-label">${label}</div>
-          <div class="metric-value">${value}</div>
+          <div class="sidebar-value">${value}</div>
         </div>
       `
     )
     .join("");
 
   els.qualityPanel.innerHTML = `
-    <div class="quality-item"><strong>Topic model</strong><div class="summary-copy">BERTopic with dense semantic embeddings (${bundle.topic_run_metadata.embedding_model}). ${bundle.topic_run_metadata.topic_count} final topics across ${formatNumber(bundle.topic_run_metadata.post_count)} cleaned posts.</div></div>
-    <div class="quality-item"><strong>Topic assignment coverage</strong><div class="summary-copy">${formatPercent(bundle.topic_run_metadata.assigned_non_outlier_posts / bundle.topic_run_metadata.post_count)} of cleaned posts were assigned to non-outlier topics. ${formatNumber(bundle.topic_run_metadata.outlier_posts)} posts remain outliers and should be reviewed during refinement.</div></div>
-    <div class="quality-item"><strong>Stance analysis status</strong><div class="summary-copy">Current Part 1.4 view is based on a preview sample of ${formatNumber(bundle.stance_preview_metadata.comment_count_analyzed)} comments across ${bundle.stance_preview_metadata.topic_count_analyzed} topics. This app surfaces the raw evidence so you can judge whether the stance split is coherent before scaling to the full corpus.</div></div>
+    <div class="quality-item">
+      <strong>Topic coverage</strong>
+      <p>${formatPercent(
+        bundle.topic_run_metadata.assigned_non_outlier_posts / bundle.topic_run_metadata.post_count
+      )} of retained posts were assigned to non-outlier topics.</p>
+    </div>
+    <div class="quality-item">
+      <strong>Labeling</strong>
+      <p>Labels and descriptions are derived from political title phrases, topic keywords, and representative threads.</p>
+    </div>
+    <div class="quality-item">
+      <strong>Stance preview</strong>
+      <p>${formatNumber(
+        bundle.stance_preview_metadata.comment_count_analyzed
+      )} comments were grouped into support/opposition previews across ${bundle.stance_preview_metadata.topic_count_analyzed} major topics.</p>
+    </div>
   `;
 }
 
-function getFilteredTopics() {
-  const search = els.searchInput.value.trim().toLowerCase();
-  const trend = els.trendFilter.value;
-  const stanceFilter = els.stanceFilter.value;
-  const flair = els.flairFilter.value;
+function initFilters() {
+  const flairs = new Set();
+  state.bundle.topics.forEach((topic) => {
+    (topic.top_flairs || []).forEach((item) => flairs.add(item.flair));
+  });
+  els.flairFilter.innerHTML = '<option value="all">All flairs</option>';
+  [...flairs]
+    .sort()
+    .forEach((flair) => {
+      const option = document.createElement("option");
+      option.value = flair;
+      option.textContent = flair;
+      els.flairFilter.append(option);
+    });
 
-  return state.bundle.topics.filter((topic) => {
-    const haystack = [
-      topic.label,
-      ...(topic.keywords || []),
-      ...((topic.top_flairs || []).map((item) => item.flair)),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    const matchesSearch = !search || haystack.includes(search);
-    const matchesTrend = trend === "all" || topic.trend_type === trend;
-    const hasPreview = Boolean(topic.stance_preview);
-    const matchesPreview =
-      stanceFilter === "all" ||
-      (stanceFilter === "with_preview" && hasPreview) ||
-      (stanceFilter === "without_preview" && !hasPreview);
-    const matchesFlair =
-      flair === "all" || (topic.top_flairs || []).some((item) => item.flair === flair);
-
-    return matchesSearch && matchesTrend && matchesPreview && matchesFlair;
+  els.dateFilter.innerHTML = '<option value="all">All months</option>';
+  state.bundle.app_meta.month_axis.forEach((month) => {
+    const option = document.createElement("option");
+    option.value = month;
+    option.textContent = month;
+    els.dateFilter.append(option);
   });
 }
 
-function renderTopicBars(topics) {
-  const maxShare = Math.max(...topics.map((topic) => topic.topic_share), 0.0001);
-  els.topicBars.innerHTML = topics
-    .slice()
-    .sort((a, b) => b.topic_share - a.topic_share)
-    .map(
-      (topic) => `
-        <div class="topic-bar">
-          <div class="topic-bar-row">
-            <strong>${escapeHtml(topic.label)}</strong>
-            <span>${formatPercent(topic.topic_share)}</span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill ${trendBadgeClass(topic.trend_type)}" style="width:${(topic.topic_share / maxShare) * 100}%"></div>
-          </div>
-        </div>
-      `
-    )
-    .join("");
-}
+function renderTopicTree() {
+  const majorTopics = filteredTree();
+  const filteredTopicCount = majorTopics.reduce((sum, node) => sum + node.children.length, 0);
+  els.topicCountLabel.textContent = `${filteredTopicCount} topics visible across ${majorTopics.length} major groups`;
+  if (!majorTopics.length) {
+    els.topicTree.innerHTML = '<div class="empty-state">No topics match the active filters.</div>';
+    return;
+  }
 
-function renderTopicGrid(topics) {
-  els.topicCountLabel.textContent = `${topics.length} topics shown`;
-  els.topicGrid.innerHTML = topics
-    .map((topic) => {
-      const preview = topic.stance_preview;
-      const supportShare = preview ? preview.support_share : 0;
-      const opposingShare = preview ? preview.opposing_share : 0;
+  const scale = state.zoom.toFixed(2);
+  els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
+  els.topicTree.style.transform = `scale(${scale})`;
+  els.topicTree.style.transformOrigin = "top left";
+
+  els.topicTree.innerHTML = majorTopics
+    .map((majorTopic) => {
+      const expanded = state.expandedMajorTopics.has(majorTopic.id);
       return `
-        <article class="topic-card ${state.activeTopicId === topic.topic_id ? "active" : ""}" data-topic-id="${topic.topic_id}">
-          <div class="topic-card-header">
-            <span class="badge ${trendBadgeClass(topic.trend_type)}">${topic.trend_type}</span>
-            ${preview ? '<span class="badge preview">Stance Preview</span>' : ""}
-          </div>
-          <div class="topic-title">${escapeHtml(topic.label)}</div>
-          <div class="topic-keywords">${escapeHtml((topic.keywords || []).slice(0, 6).join(", "))}</div>
-          <div class="mini-metrics">
-            <span class="chip">Share ${formatPercent(topic.topic_share)}</span>
-            <span class="chip">${formatNumber(topic.post_count)} posts</span>
-            ${preview ? `<span class="chip">${formatNumber(preview.comment_count)} preview comments</span>` : ""}
-          </div>
-          ${
-            preview
-              ? `
-                <div>
-                  <div class="split-row">
-                    <strong>Stance split</strong>
-                    <span>${formatPercent(supportShare)} support / ${formatPercent(opposingShare)} opposing</span>
-                  </div>
-                  <div class="split-meter">
-                    <div class="split-support" style="width:${supportShare * 100}%"></div>
-                    <div class="split-opposing" style="width:${opposingShare * 100}%"></div>
-                  </div>
-                </div>
-              `
-              : `<div class="muted">No stance preview yet for this topic.</div>`
-          }
-          <div class="chip-row">
-            ${(topic.top_flairs || [])
-              .slice(0, 3)
-              .map((item) => `<span class="chip">${escapeHtml(item.flair)}</span>`)
+        <section class="major-topic ${expanded ? "expanded" : ""}" data-major-id="${majorTopic.id}">
+          <button class="major-topic-button" type="button" data-major-id="${majorTopic.id}">
+            <div>
+              <div class="major-topic-title">${escapeHtml(majorTopic.label)}</div>
+              <div class="major-topic-meta">${formatPercent(majorTopic.topic_share)} of posts • ${formatNumber(
+                majorTopic.post_count
+              )} posts</div>
+            </div>
+            <span class="expand-indicator">${expanded ? "−" : "+"}</span>
+          </button>
+          <div class="topic-branch ${expanded ? "expanded" : ""}">
+            ${majorTopic.children
+              .map((child) => {
+                const topic = getTopicById(child.topic_id);
+                return `
+                  <article class="topic-node ${
+                    Number(state.activeTopicId) === Number(child.topic_id) ? "active" : ""
+                  }" data-topic-id="${child.topic_id}">
+                    <div class="topic-node-header">
+                      <div class="topic-node-title">${escapeHtml(child.label)}</div>
+                      <span class="badge ${trendClass(child.trend_type)}">${child.trend_type}</span>
+                    </div>
+                    <div class="topic-node-copy">${escapeHtml(topic.topic_description)}</div>
+                    <div class="topic-node-meta">
+                      <span>${formatPercent(child.topic_share)}</span>
+                      <span>${formatNumber(child.post_count)} posts</span>
+                    </div>
+                  </article>
+                `;
+              })
               .join("")}
           </div>
-        </article>
+        </section>
       `;
     })
     .join("");
 
-  [...els.topicGrid.querySelectorAll(".topic-card")].forEach((card) => {
-    card.addEventListener("click", () => {
-      state.activeTopicId = Number(card.dataset.topicId);
-      render();
+  [...els.topicTree.querySelectorAll(".major-topic-button")].forEach((button) => {
+    button.addEventListener("click", () => {
+      const majorId = button.dataset.majorId;
+      if (state.expandedMajorTopics.has(majorId)) {
+        state.expandedMajorTopics.delete(majorId);
+      } else {
+        state.expandedMajorTopics.add(majorId);
+      }
+      renderTopicTree();
+    });
+  });
+
+  [...els.topicTree.querySelectorAll(".topic-node")].forEach((node) => {
+    node.addEventListener("click", () => {
+      state.activeTopicId = Number(node.dataset.topicId);
+      renderTopicTree();
+      renderTopicDetail();
     });
   });
 }
 
-function renderTopicInspector(topic) {
-  if (!topic) {
-    els.topicInspector.classList.add("empty");
-    els.topicInspector.innerHTML =
-      '<div class="empty-state">Select a topic to inspect its summaries, posts, and stance evidence.</div>';
-    return;
+function polylinePoints(values, width, height, padding) {
+  const maxValue = Math.max(...values, 1);
+  const usableWidth = width - padding * 2;
+  const usableHeight = height - padding * 2;
+  return values
+    .map((value, index) => {
+      const x = padding + (usableWidth * index) / Math.max(values.length - 1, 1);
+      const y = padding + usableHeight - (usableHeight * value) / maxValue;
+      return `${x},${y}`;
+    })
+    .join(" ");
+}
+
+function renderTimeline(topic) {
+  const timeline = topic.timeline;
+  if (!timeline || !timeline.post_counts?.length) {
+    return '<div class="timeline-empty">No monthly trend data available.</div>';
   }
 
-  els.topicInspector.classList.remove("empty");
-  const preview = topic.stance_preview;
-  const posts = topic.representative_posts || [];
-  const supportComments = preview?.support_representative_comments || [];
-  const opposingComments = preview?.opposing_representative_comments || [];
-  const commentPreview = topic.comment_preview || [];
-  const userGroups = topic.user_groups_preview || preview?.user_groups || null;
+  const width = 520;
+  const height = 220;
+  const padding = 24;
+  const points = polylinePoints(timeline.post_counts, width, height, padding);
 
-  els.topicInspector.innerHTML = `
-    <div class="inspector-header">
-      <h2>${escapeHtml(topic.label)}</h2>
-      <span class="badge ${trendBadgeClass(topic.trend_type)}">${topic.trend_type}</span>
-      ${preview ? '<span class="badge preview">Stance Preview</span>' : ""}
-    </div>
+  const eventMarkers = (timeline.events || [])
+    .map((event) => {
+      const monthIndex = timeline.months.indexOf(event.month);
+      if (monthIndex < 0) return "";
+      const x = padding + ((width - padding * 2) * monthIndex) / Math.max(timeline.months.length - 1, 1);
+      return `
+        <line x1="${x}" y1="${padding}" x2="${x}" y2="${height - padding}" class="event-line"></line>
+        <text x="${x + 6}" y="${padding + 10}" class="event-label">${escapeHtml(event.label)}</text>
+      `;
+    })
+    .join("");
 
-    <div class="mini-metrics">
-      <span class="chip">Topic share ${formatPercent(topic.topic_share)}</span>
-      <span class="chip">${formatNumber(topic.post_count)} posts</span>
-      <span class="chip">${formatNumber(topic.active_months)} active months</span>
-      ${
-        preview
-          ? `<span class="chip">Disagreement index ${preview.disagreement_index.toFixed(3)}</span>`
-          : ""
-      }
-    </div>
+  const axisLabels = timeline.months
+    .map((month, index) => {
+      const x = padding + ((width - padding * 2) * index) / Math.max(timeline.months.length - 1, 1);
+      return `<text x="${x}" y="${height - 6}" text-anchor="middle" class="axis-label">${escapeHtml(
+        month.slice(5)
+      )}</text>`;
+    })
+    .join("");
 
-    <div class="inspector-grid">
-      <div class="inspector-panel">
-        <h3>Topic Summary</h3>
-        <div class="summary-copy">Keywords: ${escapeHtml((topic.keywords || []).join(", "))}</div>
-        <div class="chip-row">
-          ${(topic.top_flairs || [])
-            .map((item) => `<span class="chip">${escapeHtml(item.flair)} ${formatPercent(item.share_within_topic)}</span>`)
-            .join("")}
-        </div>
-      </div>
-
-      <div class="inspector-panel">
-        <h3>Trend Diagnostics</h3>
-        <div class="summary-copy">Recent share: ${formatPercent(topic.recent_share)}<br />Early share: ${formatPercent(topic.early_share)}<br />Slope: ${topic.trend_slope.toFixed(4)}<br />Variance ratio: ${topic.share_cv.toFixed(3)}</div>
-      </div>
-    </div>
-
-    <div class="inspector-grid">
-      <div class="inspector-panel">
-        <h3>Representative Posts</h3>
-        <div class="post-list">
-          ${posts
-            .map(
-              (post) => `
-                <div class="post-item">
-                  <strong>${escapeHtml(post.title)}</strong>
-                  <div class="meta-row">
-                    <span>Score ${formatNumber(post.score)}</span>
-                    <span>${formatNumber(post.num_comments)} comments</span>
-                    <span>${escapeHtml(post.created_month)}</span>
-                  </div>
-                  <a href="https://reddit.com${post.permalink}" target="_blank" rel="noreferrer">Open Reddit thread</a>
-                </div>
-              `
-            )
-            .join("")}
-        </div>
-      </div>
-
-      <div class="inspector-panel">
-        <h3>Stance Summary</h3>
-        ${
-          preview
-            ? `
-              <div class="summary-copy"><strong>Dominant position</strong><br />${escapeHtml(preview.dominant_position_summary)}</div>
-              <div class="summary-copy"><strong>Support-side arguments</strong><br />${escapeHtml(preview.support_argument_summary)}</div>
-              <div class="summary-copy"><strong>Opposing-side arguments</strong><br />${escapeHtml(preview.opposing_argument_summary)}</div>
-              <div class="split-row">
-                <strong>Comment split</strong>
-                <span>${formatNumber(preview.support_comment_count)} support / ${formatNumber(preview.opposing_comment_count)} opposing</span>
-              </div>
-              <div class="split-meter">
-                <div class="split-support" style="width:${preview.support_share * 100}%"></div>
-                <div class="split-opposing" style="width:${preview.opposing_share * 100}%"></div>
-              </div>
-            `
-            : `<div class="summary-copy">No stance preview is available for this topic yet.</div>`
-        }
-      </div>
-    </div>
-
-    ${
-      preview
-        ? `
-          <div class="inspector-grid">
-            <div class="inspector-panel">
-              <h3>Support Evidence</h3>
-              <div class="chip-row">
-                ${(preview.support_keywords || []).map((word) => `<span class="chip">${escapeHtml(word)}</span>`).join("")}
-              </div>
-              <div class="evidence-list">
-                ${supportComments
-                  .map(
-                    (item) => `
-                      <div class="evidence-item">
-                        <div class="comment-body">${escapeHtml(item.excerpt)}</div>
-                        <div class="meta-row">
-                          <span>Score ${formatNumber(item.score)}</span>
-                          <span>Confidence ${item.stance_confidence.toFixed(3)}</span>
-                        </div>
-                        <a href="https://reddit.com${item.permalink}" target="_blank" rel="noreferrer">Open comment</a>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </div>
-            </div>
-
-            <div class="inspector-panel">
-              <h3>Opposing Evidence</h3>
-              <div class="chip-row">
-                ${(preview.opposing_keywords || []).map((word) => `<span class="chip">${escapeHtml(word)}</span>`).join("")}
-              </div>
-              <div class="evidence-list">
-                ${opposingComments
-                  .map(
-                    (item) => `
-                      <div class="evidence-item">
-                        <div class="comment-body">${escapeHtml(item.excerpt)}</div>
-                        <div class="meta-row">
-                          <span>Score ${formatNumber(item.score)}</span>
-                          <span>Confidence ${item.stance_confidence.toFixed(3)}</span>
-                        </div>
-                        <a href="https://reddit.com${item.permalink}" target="_blank" rel="noreferrer">Open comment</a>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </div>
-            </div>
-          </div>
-        `
-        : ""
-    }
-
-    ${
-      userGroups
-        ? `
-          <div class="inspector-grid">
-            <div class="inspector-panel">
-              <h3>User Grouping</h3>
-              <div class="summary-copy">Support users: ${formatNumber(userGroups.support_users)}<br />Opposing users: ${formatNumber(userGroups.opposing_users)}</div>
-              <div class="user-list">
-                ${(userGroups.users || [])
-                  .slice(0, 12)
-                  .map(
-                    (user) => `
-                      <div class="user-item">
-                        <div><strong>${escapeHtml(user.author_hash)}</strong></div>
-                        <div class="meta-row">
-                          <span>${escapeHtml(user.dominant_stance)}</span>
-                          <span>${formatNumber(user.support_comments)} support</span>
-                          <span>${formatNumber(user.opposing_comments)} opposing</span>
-                          <span>Score ${formatNumber(user.total_score)}</span>
-                        </div>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </div>
-            </div>
-
-            <div class="inspector-panel">
-              <h3>Raw Preview Comments</h3>
-              <div class="comment-list">
-                ${commentPreview
-                  .map(
-                    (item) => `
-                      <div class="comment-item">
-                        <div class="meta-row">
-                          <span class="badge ${item.stance_label === "support" ? "persistent" : "trending"}">${escapeHtml(item.stance_label)}</span>
-                          <span>Confidence ${item.stance_confidence.toFixed(3)}</span>
-                          <span>Score ${formatNumber(item.score)}</span>
-                          <span>${escapeHtml(item.link_flair_text)}</span>
-                        </div>
-                        <div><strong>${escapeHtml(item.topic_post_title)}</strong></div>
-                        <div class="comment-body">${escapeHtml(item.body)}</div>
-                        <div class="meta-row">
-                          <span>${escapeHtml(item.author_hash)}</span>
-                          <span>${escapeHtml(item.created_iso)}</span>
-                        </div>
-                        <a href="https://reddit.com${item.permalink}" target="_blank" rel="noreferrer">Open comment</a>
-                      </div>
-                    `
-                  )
-                  .join("")}
-              </div>
-            </div>
-          </div>
-        `
-        : ""
-    }
+  return `
+    <svg viewBox="0 0 ${width} ${height}" class="timeline-chart" role="img" aria-label="Topic frequency chart">
+      <rect x="0" y="0" width="${width}" height="${height}" rx="18" class="chart-bg"></rect>
+      ${[0.25, 0.5, 0.75].map((fraction) => {
+        const y = padding + (height - padding * 2) * fraction;
+        return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" class="grid-line"></line>`;
+      }).join("")}
+      ${eventMarkers}
+      <polyline points="${points}" class="trend-line"></polyline>
+      ${timeline.post_counts
+        .map((value, index) => {
+          const x = padding + ((width - padding * 2) * index) / Math.max(timeline.months.length - 1, 1);
+          const maxValue = Math.max(...timeline.post_counts, 1);
+          const y = padding + (height - padding * 2) - ((height - padding * 2) * value) / maxValue;
+          return `<circle cx="${x}" cy="${y}" r="4" class="trend-point"></circle>`;
+        })
+        .join("")}
+      ${axisLabels}
+    </svg>
   `;
 }
 
-function render() {
-  const topics = getFilteredTopics();
-  state.filteredTopics = topics;
-  if (!topics.some((topic) => topic.topic_id === state.activeTopicId)) {
-    state.activeTopicId = topics[0]?.topic_id ?? null;
+function renderStancePanel(topic) {
+  const preview = topic.stance_preview;
+  if (!preview) {
+    return '<div class="detail-copy muted">No stance preview is available for this topic yet.</div>';
   }
-  renderTopicBars(topics);
-  renderTopicGrid(topics);
-  renderTopicInspector(topics.find((topic) => topic.topic_id === state.activeTopicId));
+  return `
+    <div class="stance-grid">
+      <article class="stance-card">
+        <div class="detail-subtitle">Dominant position</div>
+        <p class="detail-copy">${escapeHtml(preview.dominant_position_summary)}</p>
+      </article>
+      <article class="stance-card">
+        <div class="detail-subtitle">Agreement / disagreement</div>
+        <div class="stance-meter">
+          <div class="stance-support" style="width:${preview.support_share * 100}%"></div>
+          <div class="stance-opposing" style="width:${preview.opposing_share * 100}%"></div>
+        </div>
+        <div class="detail-meta">
+          <span>${formatPercent(preview.support_share)} support</span>
+          <span>${formatPercent(preview.opposing_share)} opposing</span>
+          <span>Index ${preview.disagreement_index.toFixed(2)}</span>
+        </div>
+      </article>
+      <article class="stance-card">
+        <div class="detail-subtitle">Support-side summary</div>
+        <p class="detail-copy">${escapeHtml(preview.support_argument_summary)}</p>
+      </article>
+      <article class="stance-card">
+        <div class="detail-subtitle">Opposing-side summary</div>
+        <p class="detail-copy">${escapeHtml(preview.opposing_argument_summary)}</p>
+      </article>
+    </div>
+  `;
+}
+
+function renderTopicDetail() {
+  const topic = getTopicById(state.activeTopicId);
+  if (!topic) {
+    els.topicDetail.innerHTML = '<div class="empty-state">Select a topic to inspect it.</div>';
+    return;
+  }
+
+  const topFlairs = (topic.top_flairs || [])
+    .map((item) => `<span class="chip">${escapeHtml(item.flair)} ${formatPercent(item.share_within_topic)}</span>`)
+    .join("");
+  const keywords = (topic.keywords || [])
+    .slice(0, 10)
+    .map((keyword) => `<span class="chip keyword-chip">${escapeHtml(keyword)}</span>`)
+    .join("");
+  const representativePosts = (topic.representative_posts || [])
+    .slice(0, 4)
+    .map(
+      (post) => `
+        <article class="post-card">
+          <div class="post-title">${escapeHtml(post.title)}</div>
+          <div class="detail-meta">
+            <span>${escapeHtml(post.link_flair_text || "Unspecified")}</span>
+            <span>${formatNumber(post.score)} score</span>
+            <span>${formatNumber(post.num_comments)} comments</span>
+            <span>${escapeHtml(post.created_month)}</span>
+          </div>
+          <a href="https://reddit.com${post.permalink}" target="_blank" rel="noreferrer">Open Reddit thread</a>
+        </article>
+      `
+    )
+    .join("");
+
+  els.topicDetail.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div class="eyebrow">${escapeHtml(topic.major_topic)}</div>
+        <h3>${escapeHtml(topic.label)}</h3>
+      </div>
+      <div class="detail-badges">
+        <span class="badge ${trendClass(topic.trend_type)}">${topic.trend_type}</span>
+        <span class="badge neutral">${formatPercent(topic.topic_share)} of posts</span>
+      </div>
+    </div>
+
+    <p class="detail-copy">${escapeHtml(topic.topic_description)}</p>
+
+    <div class="detail-metrics">
+      <div class="metric-pill">
+        <span class="metric-label">Posts</span>
+        <strong>${formatNumber(topic.post_count)}</strong>
+      </div>
+      <div class="metric-pill">
+        <span class="metric-label">Active months</span>
+        <strong>${formatNumber(topic.active_months)}</strong>
+      </div>
+      <div class="metric-pill">
+        <span class="metric-label">Trend lift</span>
+        <strong>${Number(topic.trend_lift || 0).toFixed(2)}x</strong>
+      </div>
+    </div>
+
+    <section class="detail-section">
+      <div class="detail-subtitle">Top keywords</div>
+      <div class="chip-row">${keywords}</div>
+    </section>
+
+    <section class="detail-section">
+      <div class="detail-subtitle">Top flairs</div>
+      <div class="chip-row">${topFlairs}</div>
+    </section>
+
+    <section class="detail-section">
+      <div class="detail-subtitle">Frequency over time</div>
+      ${renderTimeline(topic)}
+    </section>
+
+    <section class="detail-section">
+      <div class="detail-subtitle">Representative threads</div>
+      <div class="post-list">${representativePosts}</div>
+    </section>
+
+    <section class="detail-section">
+      <div class="detail-subtitle">Stance diagnostics</div>
+      ${renderStancePanel(topic)}
+    </section>
+  `;
+}
+
+function ensureValidActiveTopic() {
+  const visibleTree = filteredTree();
+  const visibleTopicIds = visibleTree.flatMap((majorTopic) =>
+    majorTopic.children.map((child) => Number(child.topic_id))
+  );
+  if (!visibleTopicIds.length) {
+    state.activeTopicId = null;
+    return;
+  }
+  if (!visibleTopicIds.includes(Number(state.activeTopicId))) {
+    state.activeTopicId = visibleTopicIds[0];
+  }
+  visibleTree.forEach((majorTopic) => {
+    if (majorTopic.children.some((child) => Number(child.topic_id) === Number(state.activeTopicId))) {
+      state.expandedMajorTopics.add(majorTopic.id);
+    }
+  });
+}
+
+function render() {
+  ensureValidActiveTopic();
+  renderTopicTree();
+  renderTopicDetail();
 }
 
 async function boot() {
   const response = await fetch("./data.bundle.json");
   state.bundle = await response.json();
-  initFilters(state.bundle);
-  renderOverview(state.bundle);
+  state.bundle.topic_tree.slice(0, 2).forEach((node) => state.expandedMajorTopics.add(node.id));
 
-  [els.searchInput, els.trendFilter, els.stanceFilter, els.flairFilter].forEach((el) =>
-    el.addEventListener("input", render)
-  );
-  [els.trendFilter, els.stanceFilter, els.flairFilter].forEach((el) =>
-    el.addEventListener("change", render)
-  );
-
+  initFilters();
+  renderOverview();
   render();
+
+  [els.searchInput, els.trendFilter, els.flairFilter, els.dateFilter].forEach((el) => {
+    el.addEventListener("input", render);
+    el.addEventListener("change", render);
+  });
+
+  els.zoomIn.addEventListener("click", () => {
+    state.zoom = Math.min(1.6, state.zoom + 0.1);
+    renderTopicTree();
+  });
+  els.zoomOut.addEventListener("click", () => {
+    state.zoom = Math.max(0.8, state.zoom - 0.1);
+    renderTopicTree();
+  });
+  els.languageToggle.addEventListener("click", () => {
+    state.hindiMode = !state.hindiMode;
+    els.languageToggle.setAttribute("aria-pressed", String(state.hindiMode));
+    els.languageToggle.textContent = `Hindi Mode: ${state.hindiMode ? "On" : "Off"}`;
+  });
 }
 
 boot();

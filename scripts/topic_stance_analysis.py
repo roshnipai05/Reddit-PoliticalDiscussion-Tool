@@ -40,7 +40,23 @@ DEFAULT_MODEL = "all-MiniLM-L6-v2"
 MIN_COMMENTS_PER_TOPIC = 60
 MAX_USER_PREVIEW = 50
 MAX_REPRESENTATIVE_COMMENTS = 8
+ROOT = Path(__file__).resolve().parents[1]
 STANCE_STOPWORDS = {
+    "actually",
+    "american",
+    "americans",
+    "argument",
+    "arguments",
+    "candidate",
+    "country",
+    "debate",
+    "democrat",
+    "democrats",
+    "election",
+    "elections",
+    "government",
+    "issue",
+    "issues",
     "just",
     "like",
     "really",
@@ -62,12 +78,13 @@ STANCE_STOPWORDS = {
     "should",
     "also",
     "because",
-    "parent",
-    "parents",
-    "kids",
-    "kid",
-    "child",
-    "children",
+    "policy",
+    "political",
+    "politics",
+    "trump",
+    "biden",
+    "harris",
+    "voters",
 }
 SUPPORT_CUES = {
     "agree",
@@ -101,9 +118,9 @@ OPPOSE_CUES = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--comments", default="data/cleaned/comments_clean.jsonl")
-    parser.add_argument("--post-topics", default="data/topic_analysis/post_topics.csv")
-    parser.add_argument("--topic-summary", default="data/topic_analysis/topic_summary.json")
+    parser.add_argument("--comments", default=None)
+    parser.add_argument("--post-topics", default=None)
+    parser.add_argument("--topic-summary", default=None)
     parser.add_argument("--out-dir", default="data/topic_stance")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--embedding-model", default=DEFAULT_MODEL)
@@ -134,6 +151,15 @@ def parse_args() -> argparse.Namespace:
         help="How to sample comments when --max-comments-per-topic is set.",
     )
     return parser.parse_args()
+
+
+def resolve_input_path(provided: str | None, relative_default: str) -> Path:
+    if provided:
+        return Path(provided)
+    path = ROOT / relative_default
+    if path.exists():
+        return path
+    raise FileNotFoundError(f"Input not found at {path}. Pass the path explicitly.")
 
 
 def configure_huggingface_env(model_cache_dir: Path, disable_ssl_verify: bool) -> None:
@@ -247,7 +273,7 @@ def normalize_excerpt(text: str, limit: int = 220) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     if len(text) <= limit:
         return text
-    return text[: limit - 1].rstrip() + "…"
+    return text[: limit - 3].rstrip() + "..."
 
 
 def cue_score(text: str, lexicon: set[str]) -> int:
@@ -310,6 +336,7 @@ def representative_comment_records(
 
 def summarize_cluster_arguments(
     stance_name: str,
+    topic_label: str,
     keywords: list[str],
     representative_comments: list[dict[str, Any]],
 ) -> str:
@@ -317,8 +344,11 @@ def summarize_cluster_arguments(
     preview = " ".join(item["excerpt"] for item in representative_comments[:2]).strip()
     if preview:
         preview = normalize_excerpt(preview, limit=240)
-        return f"{stance_name.capitalize()} comments focus on {keyphrase_text}. Representative remarks: {preview}"
-    return f"{stance_name.capitalize()} comments focus on {keyphrase_text}."
+        return (
+            f"In the {topic_label.lower()} discussion, {stance_name} comments mainly focus on "
+            f"{keyphrase_text}. Typical arguments include: {preview}"
+        )
+    return f"In the {topic_label.lower()} discussion, {stance_name} comments mainly focus on {keyphrase_text}."
 
 
 def infer_dominant_position(
@@ -330,7 +360,10 @@ def infer_dominant_position(
     preview = " ".join(item["excerpt"] for item in representative_comments[:2]).strip()
     if preview:
         preview = normalize_excerpt(preview, limit=220)
-        return f"For {topic_label}, the dominant position emphasizes {keyphrase_text}. Typical comments say: {preview}"
+        return (
+            f"For {topic_label}, the dominant position emphasizes {keyphrase_text}. "
+            f"Typical supporting comments say: {preview}"
+        )
     return f"For {topic_label}, the dominant position emphasizes {keyphrase_text}."
 
 
@@ -475,8 +508,8 @@ def analyze_topic_comments(
         "opposing_share": round(float(len(opposing_comments) / len(topic_comments)), 4),
         "disagreement_index": disagreement_index,
         "dominant_position_summary": infer_dominant_position(topic_row["label"], support_keywords, support_reps),
-        "support_argument_summary": summarize_cluster_arguments("support", support_keywords, support_reps),
-        "opposing_argument_summary": summarize_cluster_arguments("opposing", opposing_keywords, opposing_reps),
+        "support_argument_summary": summarize_cluster_arguments("support", topic_row["label"], support_keywords, support_reps),
+        "opposing_argument_summary": summarize_cluster_arguments("opposing", topic_row["label"], opposing_keywords, opposing_reps),
         "support_keywords": support_keywords,
         "opposing_keywords": opposing_keywords,
         "support_representative_comments": support_reps,
@@ -574,10 +607,14 @@ def main() -> None:
     model_cache_dir.mkdir(parents=True, exist_ok=True)
     configure_huggingface_env(model_cache_dir, args.disable_hf_ssl_verify)
 
-    topic_summary = load_topic_summary(Path(args.topic_summary))
+    comments_path = resolve_input_path(args.comments, "data/cleaned/comments_clean.jsonl")
+    post_topics_path = resolve_input_path(args.post_topics, "data/topic_analysis/post_topics.csv")
+    topic_summary_path = resolve_input_path(args.topic_summary, "data/topic_analysis/topic_summary.json")
+
+    topic_summary = load_topic_summary(topic_summary_path)
     valid_topic_ids = set(int(topic_id) for topic_id in topic_summary["topic_id"].tolist())
-    post_topics = load_post_topics(Path(args.post_topics), valid_topic_ids)
-    comments = build_comment_frame(Path(args.comments), post_topics)
+    post_topics = load_post_topics(post_topics_path, valid_topic_ids)
+    comments = build_comment_frame(comments_path, post_topics)
 
     topic_summary_rows = {
         int(row["topic_id"]): row
@@ -626,9 +663,9 @@ def main() -> None:
     topic_summaries = sorted(topic_summaries, key=lambda item: item["comment_count"], reverse=True)
 
     metadata = {
-        "input_comments": args.comments,
-        "input_post_topics": args.post_topics,
-        "input_topic_summary": args.topic_summary,
+        "input_comments": str(comments_path),
+        "input_post_topics": str(post_topics_path),
+        "input_topic_summary": str(topic_summary_path),
         "output_dir": str(out_dir),
         "embedding_model": args.embedding_model,
         "model_cache_dir": str(model_cache_dir),

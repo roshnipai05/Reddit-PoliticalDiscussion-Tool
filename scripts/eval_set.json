@@ -1,0 +1,131 @@
+[
+    {
+        "id": "q01",
+        "type": "factual",
+        "question": "What was the most discussed political event in the subreddit during July 2024?",
+        "reference_answer": "The two most discussed events in July 2024 were the Trump assassination attempt on July 13 and Biden's decision to exit the 2024 presidential race on July 21, both of which generated a significant volume of posts and comments.",
+        "answerable": true
+    },
+    {
+        "id": "q02",
+        "type": "factual",
+        "question": "What flair categories were most commonly used for posts about the 2024 presidential election?",
+        "reference_answer": "Posts about the 2024 presidential election were most commonly flaired under categories related to US Elections, US Politics, and similar election-specific tags, reflecting the high volume of campaign and candidate-related discussion.",
+        "answerable": true
+    },
+    {
+        "id": "q03",
+        "type": "factual",
+        "question": "How did users react to the Supreme Court's decision to overturn Chevron deference in June 2024?",
+        "reference_answer": "Users expressed significant concern about the overturning of Chevron deference, with many commenters arguing it would weaken federal regulatory agencies and shift power to the courts. Critics framed it as a major setback for environmental and consumer protections.",
+        "answerable": true
+    },
+    {
+        "id": "q04",
+        "type": "factual",
+        "question": "Were there posts discussing third-party or independent candidates in the 2024 election?",
+        "reference_answer": "Yes, there were posts discussing third-party candidates, particularly focusing on the viability and impact of independent or minor-party candidates on the 2024 election outcome, with debate over whether such candidates could affect the major-party results.",
+        "answerable": true
+    },
+    {
+        "id": "q05",
+        "type": "factual",
+        "question": "What topics related to the economy were most discussed in the subreddit?",
+        "reference_answer": "Economic discussions centred around inflation, housing costs, wages, and the overall cost of living, with users frequently debating the effectiveness of administration economic policy and comparing conditions under different political leadership.",
+        "answerable": true
+    },
+    {
+        "id": "q06",
+        "type": "opinion",
+        "question": "What do Reddit users in this community think about Biden's decision to withdraw from the 2024 presidential race?",
+        "reference_answer": "Opinions were divided. Many users expressed relief or support, arguing that Biden stepping aside was the right move for the Democratic Party's chances against Trump. A minority expressed frustration or felt the decision came too late. A common sentiment was cautious optimism about Kamala Harris as the replacement candidate.",
+        "answerable": true
+    },
+    {
+        "id": "q07",
+        "type": "opinion",
+        "question": "What are the main arguments users make for and against Kamala Harris as a presidential candidate?",
+        "reference_answer": "Arguments in favour of Harris included her prosecutorial background, her historic candidacy, and the view that she represented a meaningful contrast to Trump. Arguments against included concerns about her prior low polling numbers, questions about her policy clarity, and scepticism about whether she could consolidate enough swing-state support.",
+        "answerable": true
+    },
+    {
+        "id": "q08",
+        "type": "opinion",
+        "question": "How do users in this subreddit discuss the topic of immigration policy?",
+        "reference_answer": "Immigration discussions were contentious. Some users advocated for stricter border enforcement and linked immigration to economic concerns, while others emphasised humanitarian considerations and criticised restrictive policies. A recurring theme was debate over the political consequences of immigration as an election issue.",
+        "answerable": true
+    },
+    {
+        "id": "q09",
+        "type": "opinion",
+        "question": "What is the general sentiment toward the Republican Party and Donald Trump in this community?",
+        "reference_answer": "The general sentiment was predominantly critical. Users frequently expressed concern about Trump's policy positions, democratic norms, and character. However, some posts offered more neutral or analytical framings, and there were occasional users who defended Republican positions, particularly on economic and immigration policy.",
+        "answerable": true
+    },
+    {
+        "id": "q10",
+        "type": "opinion",
+        "question": "What do users think about the role of media coverage in the 2024 election?",
+        "reference_answer": "Users were broadly critical of media coverage, with complaints spanning both mainstream and partisan outlets. Common criticisms included both-sidesism, sensationalism, and under-reporting of policy substance in favour of horserace coverage. Some users specifically criticised coverage of Biden's age while others argued Trump received insufficient scrutiny.",
+        "answerable": true
+    },
+    {
+        "id": "q11",
+        "type": "opinion",
+        "question": "How did community discussion change after the Harris-Trump debate in September 2024?",
+        "reference_answer": "Following the Harris-Trump debate in September 2024, the majority of posts reflected a view that Harris had performed strongly and Trump had underperformed. Users pointed to specific exchanges on abortion, democracy, and the economy as moments where Harris was seen to have the upper hand. Sentiment in the community appeared more optimistic about Harris's prospects after the debate.",
+        "answerable": true
+    },
+    {
+        "id": "q12",
+        "type": "opinion",
+        "question": "What do users say about voter suppression or election integrity concerns?",
+        "reference_answer": "Users raised concerns about voter suppression through restrictive ID laws, polling access, and gerrymandering, primarily framing these as tactics used by Republican-controlled legislatures. There were also discussions about misinformation and the integrity of election administration, with most users expressing trust in the official processes while expressing concern about political interference.",
+        "answerable": true
+    },
+    {
+        "id": "q13",
+        "type": "factual",
+        "question": "Were there any posts discussing the Democratic National Convention in August 2024?",
+        "reference_answer": "Yes, the Democratic National Convention in August 2024 was discussed in the subreddit, with posts covering speaker highlights, the official nomination of Kamala Harris, and debate about the convention's effectiveness as a campaign moment.",
+        "answerable": true
+    },
+    {
+        "id": "q14",
+        "type": "factual",
+        "question": "What did users say about the results of the 2024 US Senate races and which party gained control?",
+        "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+        "answerable": false,
+        "adversarial_reason": "Senate race results were not decided until Election Day on November 5, 2024. The corpus covers up to that date but detailed post-election outcome analysis would not be present."
+    },
+    {
+        "id": "q15",
+        "type": "factual",
+        "question": "What is the most upvoted post of all time on this subreddit, and what was it about?",
+        "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+        "answerable": false,
+        "adversarial_reason": "The corpus only contains posts from a specific date range (Jun–Nov 2024). All-time statistics are not derivable from this dataset."
+    },
+    {
+        "id": "q16",
+        "type": "factual",
+        "question": "How many subreddit moderators are there and what are their usernames?",
+        "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+        "answerable": false,
+        "adversarial_reason": "Moderator information is not present in the post or comment data collected. Author information was also hashed for privacy."
+    },
+    {
+        "id": "q17",
+        "type": "opinion",
+        "question": "What do users think about NATO expansion and its role in the Russia-Ukraine war?",
+        "reference_answer": "Users discussing the Russia-Ukraine conflict generally expressed support for Ukraine and framed NATO as a defensive alliance rather than an aggressor. Criticism of Russia's invasion was dominant, with debate over the extent and nature of US military aid. Some users raised concerns about escalation risks while others argued for stronger support.",
+        "answerable": true
+    },
+    {
+        "id": "q18",
+        "type": "opinion",
+        "question": "What do users say about the US healthcare system and potential policy reforms?",
+        "reference_answer": "Healthcare was a recurring topic with users frequently criticising the cost and accessibility of the US system. Discussions often compared it unfavourably to universal systems in other countries. Policy debates centred on expanding Medicare, the Affordable Care Act, and drug pricing, with most users expressing support for more comprehensive public coverage.",
+        "answerable": true
+    }
+]

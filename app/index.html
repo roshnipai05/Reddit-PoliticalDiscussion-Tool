@@ -3,109 +3,104 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Reddit Topic Analysis Inspector</title>
+    <title>Political Discussion Analysis Explorer</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="eyebrow">NLP Project</div>
-          <h1>Reddit Topic Analysis</h1>
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="eyebrow">Political Analysis Tool</div>
+          <h1>Poliscope</h1>
           <p id="subredditLabel"></p>
         </div>
 
-        <section class="panel controls">
-          <h2>Filters</h2>
-          <label class="control">
-            <span>Search topic</span>
-            <input id="searchInput" type="search" placeholder="keywords, label, flair" />
+        <div class="conversation-bar">
+          <label class="prompt-box">
+            <span>Conversation system</span>
+            <input
+              id="conversationInput"
+              type="search"
+              placeholder="Ask about voter sentiment, coalition shifts, Supreme Court effects, or compare two topics..."
+            />
           </label>
-          <label class="control">
-            <span>Trend type</span>
-            <select id="trendFilter">
-              <option value="all">All</option>
-              <option value="Persistent">Persistent</option>
-              <option value="Trending">Trending</option>
-              <option value="Episodic">Episodic</option>
-            </select>
-          </label>
-          <label class="control">
-            <span>Stance preview</span>
-            <select id="stanceFilter">
-              <option value="all">All topics</option>
-              <option value="with_preview">With stance preview</option>
-              <option value="without_preview">Without stance preview</option>
-            </select>
-          </label>
-          <label class="control">
-            <span>Age/flair filter</span>
-            <select id="flairFilter">
-              <option value="all">All flairs</option>
-            </select>
-          </label>
+
+          <div class="toolbar">
+            <label class="toolbar-control">
+              <span>Date range</span>
+              <select id="dateFilter"></select>
+            </label>
+            <label class="toolbar-control">
+              <span>Flair</span>
+              <select id="flairFilter"></select>
+            </label>
+            <label class="toolbar-control">
+              <span>Trend</span>
+              <select id="trendFilter">
+                <option value="all">All</option>
+                <option value="Persistent">Persistent</option>
+                <option value="Trending">Trending</option>
+                <option value="Declining">Declining</option>
+                <option value="Episodic">Episodic</option>
+              </select>
+            </label>
+            <label class="toolbar-control">
+              <span>Topic search</span>
+              <input id="searchInput" type="search" placeholder="keywords or labels" />
+            </label>
+            <button id="languageToggle" class="language-toggle" type="button" aria-pressed="false">
+              Hindi Mode: Off
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <section class="sidebar-panel">
+          <div class="eyebrow">Navigation</div>
+          <nav class="nav-list">
+            <button class="nav-item active" type="button">Topic Map</button>
+            <button class="nav-item" type="button">Trend Monitor</button>
+            <button class="nav-item" type="button">Conversation QA</button>
+            <button class="nav-item" type="button">Historic Events</button>
+            <button class="nav-item" type="button">Reports</button>
+          </nav>
         </section>
 
-        <section class="panel legend">
-          <h2>Views</h2>
-          <div class="legend-item"><span class="swatch persistent"></span>Persistent topic</div>
-          <div class="legend-item"><span class="swatch trending"></span>Trending topic</div>
-          <div class="legend-item"><span class="swatch episodic"></span>Episodic topic</div>
-          <div class="legend-item"><span class="swatch preview"></span>Stance preview ready</div>
+        <section class="sidebar-panel">
+          <div class="eyebrow">Dataset</div>
+          <div id="aggregateGrid" class="sidebar-stats"></div>
+        </section>
+
+        <section class="sidebar-panel">
+          <div class="eyebrow">Model Quality</div>
+          <div id="qualityPanel" class="quality-panel"></div>
         </section>
       </aside>
 
       <main class="main-content">
-        <section class="hero">
-          <div class="hero-copy">
-            <div class="eyebrow">Inspection App</div>
-            <h2>Parts 1.1 to 1.4 on localhost</h2>
-            <p>
-              Inspect aggregate subreddit properties, topic shares, trend labels, flair segments,
-              stance splits, representative posts, and raw comment evidence behind the current model outputs.
-            </p>
-          </div>
-          <div class="hero-stats" id="overviewStats"></div>
-        </section>
+        <section class="metrics-row" id="overviewStats"></section>
 
-        <section class="section">
-          <div class="section-header">
-            <h2>Aggregate Snapshot</h2>
-          </div>
-          <div class="metrics-grid" id="aggregateGrid"></div>
-        </section>
-
-        <section class="section two-column">
-          <div class="section-card">
-            <div class="section-header">
-              <h2>Topic Landscape</h2>
-              <div class="section-note" id="topicCountLabel"></div>
+        <section class="workspace">
+          <div class="workspace-header">
+            <div>
+              <div class="eyebrow">Hierarchical Explorer</div>
+              <h2>Topic Map</h2>
+              <p id="topicCountLabel" class="workspace-copy"></p>
             </div>
-            <div id="topicBars" class="topic-bars"></div>
-          </div>
-
-          <div class="section-card">
-            <div class="section-header">
-              <h2>Method Quality</h2>
+            <div class="zoom-controls">
+              <button id="zoomOut" type="button">Zoom -</button>
+              <div id="zoomLabel" class="zoom-label">100%</div>
+              <button id="zoomIn" type="button">Zoom +</button>
             </div>
-            <div id="qualityPanel" class="quality-panel"></div>
           </div>
-        </section>
 
-        <section class="section">
-          <div class="section-header">
-            <h2>Topic Catalog</h2>
-          </div>
-          <div id="topicGrid" class="topic-grid"></div>
-        </section>
+          <div class="workspace-grid">
+            <section class="tree-panel">
+              <div id="topicTree" class="topic-tree"></div>
+            </section>
 
-        <section class="section">
-          <div class="section-header">
-            <h2>Topic Inspector</h2>
-            <div class="section-note">Select a topic card to inspect representative evidence.</div>
-          </div>
-          <div id="topicInspector" class="topic-inspector empty">
-            <div class="empty-state">Select a topic to inspect its summaries, posts, and stance evidence.</div>
+            <section class="detail-panel" id="topicDetail"></section>
           </div>
         </section>
       </main>
