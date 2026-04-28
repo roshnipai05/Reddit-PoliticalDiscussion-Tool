@@ -13,7 +13,7 @@ import json
 import math
 import os
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS
+
+from llm_summaries import groq_available, groq_json_completion
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,7 +72,7 @@ POLITICAL_STOPWORDS = {
 }
 GENERIC_TOPIC_STOPWORDS = ENGLISH_STOP_WORDS.union(POLITICAL_STOPWORDS)
 UPPER_TOKENS = {"US", "UK", "EU", "UN", "NATO", "NLRB", "DNC", "RNC", "GOP", "IRS", "DEA"}
-MAJOR_TOPIC_RULES = [
+DOMAIN_ARCHETYPES = [
     (
         "elections-campaigns",
         "Elections & Campaigns",
@@ -92,7 +94,7 @@ MAJOR_TOPIC_RULES = [
     ),
     (
         "institutions-law",
-        "Institutions & Law",
+        "Institutions, Courts & Law",
         {"legal/courts", "legislation"},
         {
             "agency",
@@ -110,8 +112,44 @@ MAJOR_TOPIC_RULES = [
         },
     ),
     (
-        "foreign-policy",
-        "Foreign Affairs",
+        "economy-domestic-policy",
+        "Economy, Labor & Domestic Policy",
+        {"us politics", "legislation"},
+        {
+            "economy",
+            "healthcare",
+            "housing",
+            "immigration",
+            "inflation",
+            "jobs",
+            "labor",
+            "prices",
+            "tax",
+            "wages",
+            "worker",
+        },
+    ),
+    (
+        "identity-rights-social-conflict",
+        "Identity, Rights & Social Conflict",
+        {"us politics", "political theory"},
+        {
+            "abortion",
+            "civil rights",
+            "gender",
+            "identity",
+            "police",
+            "protest",
+            "race",
+            "racial",
+            "speech",
+            "trans",
+            "women",
+        },
+    ),
+    (
+        "foreign-policy-geopolitics",
+        "Foreign Policy & Geopolitics",
         {"international politics", "european politics", "non-us politics"},
         {
             "china",
@@ -128,24 +166,80 @@ MAJOR_TOPIC_RULES = [
         },
     ),
     (
-        "economy-policy",
-        "Economy & Domestic Policy",
-        {"us politics", "legislation"},
+        "parties-media-political-narratives",
+        "Parties, Media & Political Narratives",
+        {"us politics", "political theory", "political history"},
         {
-            "abortion",
-            "economy",
-            "healthcare",
-            "housing",
-            "immigration",
-            "inflation",
-            "jobs",
-            "labor",
-            "prices",
-            "tax",
-            "wages",
+            "coalition",
+            "democratic party",
+            "disinformation",
+            "media",
+            "messaging",
+            "narrative",
+            "party",
+            "polarization",
+            "press",
+            "republican party",
         },
     ),
 ]
+ISSUE_AREA_RULES = [
+    ("Campaign strategy and voter coalition shifts", "elections-campaigns", {"campaign", "coalition", "electability", "ticket", "voter", "voters", "swing", "strategy", "turnout", "path to victory", "map"}),
+    ("Polling, debate performance and electoral momentum", "elections-campaigns", {"poll", "polls", "polling", "debate", "momentum", "undecided", "approval", "favorability", "selzer"}),
+    ("Election legitimacy, voting rules and electoral systems", "elections-campaigns", {"electoral college", "mail ballot", "ballot", "voting system", "ranked choice", "election legitimacy", "certification", "third party"}),
+    ("Project 2025 and the second-term governing agenda", "elections-campaigns", {"project 2025", "first 100 days", "second term", "governing agenda", "pbs", "dei"}),
+    ("Supreme Court power and constitutional constraints", "institutions-law", {"supreme court", "constitutional", "constitution", "ruling", "immunity", "chevron", "judicial", "court", "courts"}),
+    ("Executive power, appointments and federal governance", "institutions-law", {"executive", "attorney general", "cabinet", "agency", "senate", "congress", "governance", "appointment", "filibuster"}),
+    ("Criminal cases, investigations and legal accountability", "institutions-law", {"indictment", "conviction", "trial", "judge", "jack smith", "hacked", "classified documents", "prosecution", "appeal"}),
+    ("Immigration enforcement and border policy", "economy-domestic-policy", {"immigration", "border", "migrant", "asylum", "deport", "deportation"}),
+    ("Inflation, housing costs and consumer pressure", "economy-domestic-policy", {"inflation", "prices", "housing", "rent", "cost of living", "groceries", "affordability"}),
+    ("Labor, wages and worker bargaining power", "economy-domestic-policy", {"labor", "union", "wages", "worker", "workers", "strike", "jobs"}),
+    ("Healthcare, social insurance and public spending", "economy-domestic-policy", {"healthcare", "medicare", "medicaid", "insurance", "social security", "benefits", "public option"}),
+    ("Abortion rights and reproductive policy", "identity-rights-social-conflict", {"abortion", "reproductive", "roe", "pregnancy", "planned parenthood"}),
+    ("Gender identity, trans rights and family policy", "identity-rights-social-conflict", {"trans", "gender", "gender-affirming", "gender affirming", "lgbt", "bathroom", "pronouns"}),
+    ("Race, civil rights and protest politics", "identity-rights-social-conflict", {"black lives matter", "blm", "racial", "race", "civil rights", "police", "protest", "speech", "campus"}),
+    ("Free speech, protest norms and social backlash", "identity-rights-social-conflict", {"free speech", "speech", "cancel culture", "campus", "protest", "censorship", "backlash"}),
+    ("Israel, Gaza and US alignment in the Middle East", "foreign-policy-geopolitics", {"israel", "gaza", "hamas", "palestine", "middle east", "ceasefire"}),
+    ("Ukraine, Russia and Western security commitments", "foreign-policy-geopolitics", {"ukraine", "russia", "putin", "nato", "europe", "aid package"}),
+    ("China, trade competition and strategic rivalry", "foreign-policy-geopolitics", {"china", "taiwan", "trade", "tariff", "strategic rivalry", "manufacturing"}),
+    ("Democracy, authoritarianism and institutional trust", "foreign-policy-geopolitics", {"fascist", "fascism", "dictatorship", "authoritarian", "leader free world", "democracy", "communist", "communism"}),
+    ("Party identity, coalition fracture and ideological direction", "parties-media-political-narratives", {"democratic party", "republican party", "party", "coalition", "base", "establishment", "realignment", "platform"}),
+    ("Media trust, messaging and narrative control", "parties-media-political-narratives", {"media", "press", "coverage", "messaging", "narrative", "disinformation", "journalist", "wikileaks"}),
+    ("Vice-presidential picks, surrogates and campaign bench", "parties-media-political-narratives", {"running mate", "jd vance", "rfk", "vice president", "vp pick", "surrogate", "bench"}),
+    ("MAGA identity and the Republican coalition", "parties-media-political-narratives", {"maga", "trumpism", "gop respond", "republican party", "maga movement"}),
+    ("Democratic norms, political violence and institutional trust", "parties-media-political-narratives", {"assassination attempt", "political violence", "norms", "trust", "democracy", "authoritarian", "legitimacy"}),
+]
+NOISY_LABEL_TERMS = {
+    "asked",
+    "chatgpt",
+    "simulate",
+    "question",
+    "thoughts",
+    "wrong",
+    "happen",
+    "happened",
+    "mean",
+    "impact",
+    "work",
+    "choice",
+    "https",
+    "www",
+    "donald",
+    "president",
+    "party",
+    "project",
+    "leader",
+}
+NOISY_SALIENT_PHRASES = {
+    "Https Www",
+    "Help Understand",
+    "Look Like",
+    "Make Sense",
+    "Party",
+    "President",
+    "Donald",
+    "Project",
+}
 
 
 def resolve_input_path(provided: str | None, default_name: str) -> Path:
@@ -167,6 +261,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embedding-model", default=DEFAULT_MODEL)
     parser.add_argument("--model-cache-dir", default="data/models/huggingface")
     parser.add_argument("--disable-hf-ssl-verify", action="store_true")
+    parser.add_argument("--disable-groq-summaries", action="store_true")
     parser.add_argument("--reuse-existing", action="store_true")
     parser.add_argument(
         "--reduce-outliers",
@@ -319,6 +414,15 @@ def title_tokens(text: str) -> list[str]:
     return [token.lower() for token in TITLE_TOKEN_RE.findall(text)]
 
 
+def clean_phrase(text: str) -> str:
+    text = re.sub(r"\s+", " ", str(text)).strip(" -,:;.!?")
+    return text
+
+
+def phrase_tokens(text: str) -> list[str]:
+    return [token.lower() for token in TITLE_TOKEN_RE.findall(text)]
+
+
 def score_title_phrases(topic_posts: pd.DataFrame, top_n: int = 12) -> list[str]:
     phrases: Counter[str] = Counter()
     for title in topic_posts["title"].head(200):
@@ -337,6 +441,62 @@ def score_title_phrases(topic_posts: pd.DataFrame, top_n: int = 12) -> list[str]
     return ranked[:top_n]
 
 
+def extract_salient_phrases(topic_posts: pd.DataFrame, top_n: int = 18) -> list[str]:
+    texts = (
+        topic_posts["title"].fillna("")
+        + ". "
+        + topic_posts["selftext"].fillna("").astype(str).str.slice(0, 280)
+    ).tolist()
+    if not texts:
+        return []
+    min_df = 2 if len(texts) >= 30 else 1
+    vectorizer = CountVectorizer(
+        stop_words=sorted(GENERIC_TOPIC_STOPWORDS),
+        ngram_range=(1, 3),
+        min_df=min_df,
+        max_df=0.85,
+    )
+    try:
+        matrix = vectorizer.fit_transform(texts)
+    except ValueError:
+        return []
+    feature_names = np.asarray(vectorizer.get_feature_names_out())
+    counts = np.asarray(matrix.sum(axis=0)).ravel()
+    doc_freq = np.asarray((matrix > 0).sum(axis=0)).ravel()
+    title_phrase_counts = Counter(score_title_phrases(topic_posts, top_n=40))
+    scored: list[tuple[float, str]] = []
+    total_docs = max(len(texts), 1)
+    for phrase, count, freq in zip(feature_names, counts, doc_freq):
+        phrase = clean_phrase(phrase)
+        tokens = phrase_tokens(phrase)
+        if not phrase or not tokens:
+            continue
+        if all(token in GENERIC_TOPIC_STOPWORDS or token in NOISY_LABEL_TERMS for token in tokens):
+            continue
+        if len(tokens) == 1 and freq < max(3, total_docs * 0.08):
+            continue
+        quality = 1.0 + 0.4 * min(len(tokens), 3)
+        title_boost = 1.0 + 0.75 * title_phrase_counts.get(phrase, 0)
+        specificity = 1.0 + min(freq / total_docs, 0.35)
+        penalty = 0.55 if any(token in NOISY_LABEL_TERMS for token in tokens) else 1.0
+        score = float(count) * quality * title_boost * specificity * penalty
+        scored.append((score, phrase))
+    ranked: list[str] = []
+    seen: set[str] = set()
+    for _, phrase in sorted(scored, reverse=True):
+        normalized = phrase.lower()
+        if normalized in seen:
+            continue
+        formatted = format_label_text(phrase)
+        if formatted in NOISY_SALIENT_PHRASES:
+            continue
+        seen.add(normalized)
+        ranked.append(formatted)
+        if len(ranked) >= top_n:
+            break
+    return ranked
+
+
 def format_label_text(text: str) -> str:
     parts = []
     for token in text.split():
@@ -345,23 +505,73 @@ def format_label_text(text: str) -> str:
     return " ".join(parts)
 
 
-def pick_label_phrase(topic_posts: pd.DataFrame, keywords: list[str]) -> str:
-    phrases = score_title_phrases(topic_posts)
-    if phrases:
-        return format_label_text(phrases[0])
+def normalize_merge_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
-    picked: list[str] = []
-    for keyword in keywords:
-        for token in keyword.split():
-            token = token.strip().lower()
-            if token and token not in GENERIC_TOPIC_STOPWORDS and token not in picked:
-                picked.append(token)
-            if len(picked) == 3:
-                break
-        if len(picked) == 3:
-            break
-    if picked:
-        return format_label_text(" ".join(picked))
+
+def issue_rule_domain(label: str) -> tuple[str, str] | None:
+    for candidate_label, slug, _ in ISSUE_AREA_RULES:
+        if candidate_label == label:
+            for domain_slug, domain_name, _, _ in DOMAIN_ARCHETYPES:
+                if domain_slug == slug:
+                    return domain_slug, domain_name
+    return None
+
+
+def score_issue_area_rule(
+    hint_text: str,
+    title_text: str,
+    flair_names: set[str],
+    rule_hints: set[str],
+) -> float:
+    score = 0.0
+    for hint in rule_hints:
+        if hint in hint_text:
+            score += 2.5 if " " in hint else 1.5
+        if hint in title_text:
+            score += 1.25
+    if any(flair in flair_names for flair in ("legal/courts", "legislation")) and any(
+        hint in rule_hints for hint in {"court", "courts", "law", "legal", "supreme court"}
+    ):
+        score += 1.5
+    return score
+
+
+def infer_issue_area_label(
+    topic_posts: pd.DataFrame,
+    keywords: list[str],
+    top_flairs: list[dict[str, Any]],
+    representative_titles: list[str],
+    salient_phrases: list[str],
+) -> str:
+    candidate_phrases = [*salient_phrases, *score_title_phrases(topic_posts, top_n=20), *keywords]
+    hint_text = " ".join(item.lower() for item in [*candidate_phrases, *representative_titles])
+    title_text = " ".join(title.lower() for title in representative_titles)
+    flair_names = {item["flair"].lower() for item in top_flairs}
+    scored_rules = [
+        (score_issue_area_rule(hint_text, title_text, flair_names, hints), label)
+        for label, _, hints in ISSUE_AREA_RULES
+    ]
+    best_score, best_label = max(scored_rules, key=lambda item: item[0], default=(0.0, ""))
+    if best_score >= 3.0:
+        return best_label
+
+    median_score = float(topic_posts["score"].median()) if "score" in topic_posts else 0.0
+    dominant_flair = top_flairs[0]["flair"].lower() if top_flairs else ""
+    if median_score <= 2:
+        if dominant_flair in {"us elections", "us politics"}:
+            return "General campaign chatter and voter sentiment"
+        return "Low-signal general political discussion"
+
+    for phrase in candidate_phrases:
+        tokens = [token for token in phrase_tokens(phrase) if token not in GENERIC_TOPIC_STOPWORDS]
+        if len(tokens) < 2:
+            continue
+        if any(token in NOISY_LABEL_TERMS for token in tokens):
+            continue
+        candidate = format_label_text(" ".join(tokens[:5]))
+        if len(candidate) >= 12:
+            return candidate
     return "General Political Discussion"
 
 
@@ -457,13 +667,23 @@ def classify_topic_trend_from_metrics(
     return "Episodic"
 
 
-def detect_major_topic(topic_label: str, topic_keywords: list[str], top_flairs: list[dict[str, Any]]) -> tuple[str, str]:
-    text = " ".join([topic_label.lower(), *[keyword.lower() for keyword in topic_keywords]])
+def detect_major_topic(
+    topic_label: str,
+    topic_keywords: list[str],
+    top_flairs: list[dict[str, Any]],
+    salient_phrases: list[str],
+) -> tuple[str, str]:
+    forced_domain = issue_rule_domain(topic_label)
+    if forced_domain is not None:
+        return forced_domain
+    text = " ".join(
+        [topic_label.lower(), *[keyword.lower() for keyword in topic_keywords], *[phrase.lower() for phrase in salient_phrases]]
+    )
     flair_names = {item["flair"].lower() for item in top_flairs}
-    best_slug = "parties-ideology"
-    best_name = "Parties & Public Narratives"
+    best_slug = "parties-media-political-narratives"
+    best_name = "Parties, Media & Political Narratives"
     best_score = 0
-    for slug, name, flair_hints, keyword_hints in MAJOR_TOPIC_RULES:
+    for slug, name, flair_hints, keyword_hints in DOMAIN_ARCHETYPES:
         score = 0
         score += len(flair_names.intersection(flair_hints)) * 3
         score += sum(1 for hint in keyword_hints if hint in text)
@@ -480,15 +700,70 @@ def build_topic_description(
     keywords: list[str],
     top_flairs: list[dict[str, Any]],
     representative_titles: list[str],
+    salient_phrases: list[str],
 ) -> str:
-    focus_terms = ", ".join(keywords[:4]) if keywords else "closely related issues"
+    focus_terms = ", ".join(salient_phrases[:3] or keywords[:4]) if (salient_phrases or keywords) else "closely related issues"
     flair_text = top_flairs[0]["flair"] if top_flairs else "mixed flairs"
-    title_hint = representative_titles[0] if representative_titles else label
+    title_hints = [clean_phrase(title) for title in representative_titles[:2] if clean_phrase(title)]
+    recurring_threads = ", ".join(title if len(title) <= 120 else f"{title[:117].rstrip()}..." for title in title_hints)
+    if recurring_threads:
+        recurring_threads = recurring_threads.rstrip(".?")
+    else:
+        recurring_threads = label
     return (
-        f"This topic groups posts about {label.lower()} within the broader {major_topic.lower()} discussion space. "
-        f"It is primarily surfaced through {flair_text.lower()} posts and focuses on {focus_terms}. "
-        f"Representative threads center on questions like: {title_hint}"
+        f"This sub-topic sits within the broader {major_topic.lower()} domain and centers on {label.lower()}. "
+        f"Across the cluster, posts repeatedly return to {focus_terms}, with the conversation most often surfacing through {flair_text.lower()} threads. "
+        f"Recurring discussions include {recurring_threads}."
     )
+
+
+def build_topic_description_generative(
+    label: str,
+    major_topic: str,
+    keywords: list[str],
+    salient_phrases: list[str],
+    top_flairs: list[dict[str, Any]],
+    representative_posts: list[dict[str, Any]],
+    disable_groq_summaries: bool,
+) -> str:
+    fallback = build_topic_description(
+        label=label,
+        major_topic=major_topic,
+        keywords=keywords,
+        top_flairs=top_flairs,
+        representative_titles=[post.get("title", "") for post in representative_posts[:3]],
+        salient_phrases=salient_phrases,
+    )
+    if disable_groq_summaries or not groq_available():
+        return fallback
+
+    try:
+        system_prompt = (
+            "You are writing analytical topic descriptions for a political discussion dataset. "
+            "Return strict JSON with key `topic_description`. "
+            "Write 2 to 3 sentences. Be specific, synthetic, and descriptive. "
+            "Describe the shared issue area tying the posts together, not just keywords or one headline. "
+            "Do not mention that you are analyzing a dataset."
+        )
+        post_lines = "\n".join(
+            f"- {post.get('title', '')} [flair={post.get('link_flair_text', 'Unspecified')}, month={post.get('created_month', '')}]"
+            for post in representative_posts[:5]
+        )
+        flair_lines = ", ".join(f"{item['flair']} ({item['share_within_topic']:.1%})" for item in top_flairs[:4])
+        payload = (
+            f"Major topic domain: {major_topic}\n"
+            f"Sub-topic label: {label}\n"
+            f"Keywords: {', '.join(keywords[:8])}\n"
+            f"Salient issue signals: {', '.join(salient_phrases[:8])}\n"
+            f"Top flairs: {flair_lines}\n"
+            f"Representative posts:\n{post_lines}\n\n"
+            "Return JSON like {\"topic_description\": \"...\"}."
+        )
+        result = groq_json_completion(system_prompt, payload, max_tokens=240)
+        description = clean_phrase(str(result.get("topic_description", "")))
+        return description or fallback
+    except Exception:
+        return fallback
 
 
 def write_report(summary: pd.DataFrame, agg_stats: dict[str, Any], out_path: Path) -> None:
@@ -518,6 +793,7 @@ def write_report(summary: pd.DataFrame, agg_stats: dict[str, Any], out_path: Pat
                 f"- **Share of Total Posts:** {row['topic_share']:.2%} ({row['post_count']} posts)",
                 f"- **Description:** {row['topic_description']}",
                 f"- **Top Keywords:** {', '.join(row['keywords'])}",
+                f"- **Salient Issue Signals:** {', '.join(row.get('salient_phrases', [])[:5])}",
                 f"- **Top Flair Filters:** {flair_text}",
                 f"- **Trend Lift:** {row['trend_lift']:.2f}",
                 "",
@@ -535,6 +811,8 @@ def load_existing_summary(path: Path) -> pd.DataFrame:
         "top_flairs",
         "representative_posts",
         "representative_titles",
+        "salient_phrases",
+        "merged_topic_ids",
         "monthly_post_count_series",
         "monthly_share_series",
     }
@@ -560,6 +838,118 @@ def refresh_trend_labels(summary: pd.DataFrame) -> pd.DataFrame:
     return refreshed
 
 
+def load_existing_topic_keywords(path: Path) -> dict[int, list[str]]:
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        int(row["topic_id"]): [str(item) for item in row.get("keywords", [])]
+        for row in rows
+        if int(row.get("topic_id", -1)) != -1
+    }
+
+
+def build_refined_topic_summary(
+    posts: pd.DataFrame,
+    raw_keyword_map: dict[int, list[str]],
+    total_posts_by_month: pd.Series,
+    disable_groq_summaries: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    posts = posts.copy()
+    posts["raw_topic_id"] = posts["topic_id"].astype(int)
+    draft_rows: list[dict[str, Any]] = []
+    for topic_id in sorted(topic_id for topic_id in posts["raw_topic_id"].unique() if int(topic_id) != -1):
+        topic_posts = posts[posts["raw_topic_id"] == topic_id].copy()
+        top_flairs = flair_breakdown(topic_posts)
+        representative_title_list = summarize_titles(topic_posts, limit=3)
+        raw_keywords = raw_keyword_map.get(int(topic_id), [])
+        salient_phrases = extract_salient_phrases(topic_posts)
+        refined_label = infer_issue_area_label(
+            topic_posts=topic_posts,
+            keywords=raw_keywords,
+            top_flairs=top_flairs,
+            representative_titles=representative_title_list,
+            salient_phrases=salient_phrases,
+        )
+        major_topic_slug, major_topic = detect_major_topic(refined_label, raw_keywords, top_flairs, salient_phrases)
+        draft_rows.append(
+            {
+                "raw_topic_id": int(topic_id),
+                "merge_key": f"{major_topic_slug}::{normalize_merge_key(refined_label)}",
+                "label": refined_label,
+                "major_topic_slug": major_topic_slug,
+                "major_topic": major_topic,
+                "keywords": raw_keywords,
+                "salient_phrases": salient_phrases,
+                "top_flairs": top_flairs,
+                "representative_titles": representative_title_list,
+            }
+        )
+
+    refined_topics: list[dict[str, Any]] = []
+    total_posts = len(posts)
+    next_topic_id = 0
+
+    for _, group in pd.DataFrame(draft_rows).groupby("merge_key", sort=False):
+        raw_topic_ids = [int(value) for value in group["raw_topic_id"].tolist()]
+        merged_posts = posts[posts["raw_topic_id"].isin(raw_topic_ids)].copy()
+        merged_posts["topic_id"] = next_topic_id
+        posts.loc[posts["raw_topic_id"].isin(raw_topic_ids), "topic_id"] = next_topic_id
+
+        keyword_counter: Counter[str] = Counter()
+        phrase_counter: Counter[str] = Counter()
+        for row in group.to_dict(orient="records"):
+            keyword_counter.update(row["keywords"])
+            phrase_counter.update(row["salient_phrases"])
+        top_flairs = flair_breakdown(merged_posts)
+        representative_title_list = summarize_titles(merged_posts, limit=3)
+        salient_phrases = [phrase for phrase, _ in phrase_counter.most_common(8)]
+        if not salient_phrases:
+            salient_phrases = extract_salient_phrases(merged_posts, top_n=8)
+        keywords = [phrase for phrase, _ in keyword_counter.most_common(TOPIC_WORD_LIMIT)]
+        if not keywords:
+            keywords = [normalize_merge_key(phrase).replace(" ", "_") for phrase in salient_phrases[:TOPIC_WORD_LIMIT]]
+        label = str(group.iloc[0]["label"])
+        major_topic_slug = str(group.iloc[0]["major_topic_slug"])
+        major_topic = str(group.iloc[0]["major_topic"])
+        trend = classify_topic_trend(merged_posts.groupby("created_month").size(), total_posts_by_month)
+        rep_posts = representative_posts(merged_posts)
+        refined_topics.append(
+            {
+                "topic_id": next_topic_id,
+                "label": label,
+                "topic_description": build_topic_description_generative(
+                    label=label,
+                    major_topic=major_topic,
+                    keywords=keywords,
+                    salient_phrases=salient_phrases,
+                    top_flairs=top_flairs,
+                    representative_posts=rep_posts,
+                    disable_groq_summaries=disable_groq_summaries,
+                ),
+                "major_topic_slug": major_topic_slug,
+                "major_topic": major_topic,
+                "keywords": keywords[:TOPIC_WORD_LIMIT],
+                "salient_phrases": salient_phrases[:10],
+                "post_count": int(len(merged_posts)),
+                "topic_share": float(len(merged_posts) / total_posts),
+                "top_flairs": top_flairs,
+                "representative_titles": representative_title_list,
+                "representative_posts": rep_posts,
+                "merged_topic_ids": raw_topic_ids,
+                **trend,
+            }
+        )
+        next_topic_id += 1
+
+    summary = pd.DataFrame(refined_topics).sort_values("topic_share", ascending=False).reset_index(drop=True)
+    topic_id_reindex = {
+        int(old_topic_id): int(new_topic_id)
+        for new_topic_id, old_topic_id in enumerate(summary["topic_id"].tolist())
+    }
+    posts["topic_id"] = posts["topic_id"].map(topic_id_reindex).astype(int)
+    summary["topic_id"] = summary["topic_id"].map(topic_id_reindex).astype(int)
+    return summary.sort_values("topic_share", ascending=False).reset_index(drop=True), posts
+
+
 def save_summary_outputs(summary: pd.DataFrame, out_dir: Path, agg_stats: dict[str, Any]) -> None:
     topic_summary_csv_path = out_dir / "topic_summary.csv"
     topic_summary_json_path = out_dir / "topic_summary.json"
@@ -573,6 +963,8 @@ def save_summary_outputs(summary: pd.DataFrame, out_dir: Path, agg_stats: dict[s
         "top_flairs",
         "representative_posts",
         "representative_titles",
+        "salient_phrases",
+        "merged_topic_ids",
         "monthly_post_count_series",
         "monthly_share_series",
     ):
@@ -621,12 +1013,39 @@ def main() -> None:
     metadata_path = out_dir / "run_metadata.json"
 
     if args.reuse_existing:
-        summary = load_existing_summary(out_dir / "topic_summary.csv")
-        summary = refresh_trend_labels(summary).sort_values("topic_share", ascending=False)
-        save_summary_outputs(summary, out_dir, agg_stats)
+        existing_post_topics = pd.read_csv(out_dir / "post_topics.csv")
+        posts = posts.merge(existing_post_topics[["post_id", "topic_id"]], on="post_id", how="inner")
+        raw_keyword_map = load_existing_topic_keywords(out_dir / "topic_summary.json")
+        months = pd.Index(sorted(posts["created_month"].unique()), name="created_month")
+        total_posts_by_month = posts.groupby("created_month").size().reindex(months, fill_value=0)
+        summary, posts = build_refined_topic_summary(
+            posts,
+            raw_keyword_map,
+            total_posts_by_month,
+            args.disable_groq_summaries,
+        )
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         metadata["reuse_existing"] = True
         metadata["trend_labels_refreshed"] = True
+        metadata["topic_count"] = int(len(summary))
+        metadata["month_axis"] = months.tolist()
+        metadata["post_count"] = int(len(posts))
+        metadata["assigned_non_outlier_posts"] = int(len(posts))
+        metadata["outlier_posts"] = 0
+        metadata["refinement_mode"] = "reuse-existing-assignments"
+        posts[
+            [
+                "post_id",
+                "topic_id",
+                "created_month",
+                "link_flair_text",
+                "score",
+                "num_comments",
+                "title",
+                "permalink",
+            ]
+        ].to_csv(out_dir / "post_topics.csv", index=False)
+        save_summary_outputs(summary, out_dir, agg_stats)
         metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Refreshed trend labels for {len(summary)} topics using existing outputs.")
         return
@@ -649,39 +1068,16 @@ def main() -> None:
     months = pd.Index(sorted(posts["created_month"].unique()), name="created_month")
     total_posts_by_month = posts.groupby("created_month").size().reindex(months, fill_value=0)
 
-    summary_rows: list[dict[str, Any]] = []
-    for topic_id in sorted(non_outlier["topic_id"].unique()):
-        topic_posts = posts[posts["topic_id"] == topic_id].copy()
-        top_flairs = flair_breakdown(topic_posts)
-        keywords = keyword_list(topic_model, int(topic_id), limit=TOPIC_WORD_LIMIT)
-        label = pick_label_phrase(topic_posts, keywords)
-        representative_title_list = summarize_titles(topic_posts, limit=3)
-        major_topic_slug, major_topic = detect_major_topic(label, keywords, top_flairs)
-        trend = classify_topic_trend(topic_posts.groupby("created_month").size(), total_posts_by_month)
-        summary_rows.append(
-            {
-                "topic_id": int(topic_id),
-                "label": label,
-                "topic_description": build_topic_description(
-                    label=label,
-                    major_topic=major_topic,
-                    keywords=keywords,
-                    top_flairs=top_flairs,
-                    representative_titles=representative_title_list,
-                ),
-                "major_topic_slug": major_topic_slug,
-                "major_topic": major_topic,
-                "keywords": keywords,
-                "post_count": int(len(topic_posts)),
-                "topic_share": float(len(topic_posts) / total_posts),
-                "top_flairs": top_flairs,
-                "representative_titles": representative_title_list,
-                "representative_posts": representative_posts(topic_posts),
-                **trend,
-            }
-        )
-
-    summary = pd.DataFrame(summary_rows).sort_values("topic_share", ascending=False)
+    raw_keyword_map = {
+        int(topic_id): keyword_list(topic_model, int(topic_id), limit=TOPIC_WORD_LIMIT)
+        for topic_id in sorted(non_outlier["topic_id"].unique())
+    }
+    summary, posts = build_refined_topic_summary(
+        posts[posts["topic_id"] != -1].copy(),
+        raw_keyword_map,
+        total_posts_by_month,
+        args.disable_groq_summaries,
+    )
 
     post_topics_path = out_dir / "post_topics.csv"
     monthly_path = out_dir / "topic_monthly_trends.csv"
@@ -731,6 +1127,7 @@ def main() -> None:
         "embedding_model": args.embedding_model,
         "model_cache_dir": str(model_cache_dir),
         "disable_hf_ssl_verify": args.disable_hf_ssl_verify,
+        "disable_groq_summaries": args.disable_groq_summaries,
         "reduce_outliers": args.reduce_outliers,
         "post_count": int(total_posts),
         "assigned_non_outlier_posts": int(len(non_outlier)),

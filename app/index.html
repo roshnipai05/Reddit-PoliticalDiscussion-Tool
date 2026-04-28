@@ -21,11 +21,25 @@
             <input
               id="conversationInput"
               type="search"
-              placeholder="Ask about voter sentiment, coalition shifts, Supreme Court effects, or compare two topics..."
+              placeholder='Type a prefixed question such as aggregate: "Who are the top politicians being discussed?"'
+              autocomplete="off"
+              aria-describedby="queryTypeHint"
             />
+            <div id="queryTypeMenu" class="query-type-menu" hidden></div>
+            <div id="queryTypeHint" class="prompt-hint">
+              Prefix each question with `focused:`, `aggregate:`, `comparison:`, or `multi-hop:`. Click the bar to see examples.
+            </div>
           </label>
 
           <div class="toolbar">
+            <label class="toolbar-control">
+              <span>QA model</span>
+              <select id="modelSelect">
+                <option value="both">Groq + Gemini</option>
+                <option value="groq">Groq only</option>
+                <option value="gemini">Gemini only</option>
+              </select>
+            </label>
             <label class="toolbar-control">
               <span>Date range</span>
               <select id="dateFilter"></select>
@@ -51,6 +65,7 @@
             <button id="languageToggle" class="language-toggle" type="button" aria-pressed="false">
               Hindi Mode: Off
             </button>
+            <button id="askButton" class="ask-button" type="button">Run QA</button>
           </div>
         </div>
       </header>
@@ -76,10 +91,34 @@
           <div class="eyebrow">Model Quality</div>
           <div id="qualityPanel" class="quality-panel"></div>
         </section>
+
+        <section class="sidebar-panel">
+          <div class="eyebrow">Pipeline Control</div>
+          <div class="pipeline-actions">
+            <button id="refreshStatusButton" class="pipeline-button" type="button">Refresh status</button>
+            <button id="rebuildBundleButton" class="pipeline-button" type="button">Rebuild bundle</button>
+            <button id="runTopicAnalysisButton" class="pipeline-button" type="button">Run topic analysis</button>
+            <button id="runStanceAnalysisButton" class="pipeline-button" type="button">Run stance preview</button>
+          </div>
+          <div id="pipelineStatus" class="pipeline-status"></div>
+        </section>
       </aside>
 
       <main class="main-content">
         <section class="metrics-row" id="overviewStats"></section>
+
+        <section class="workspace qa-workspace">
+          <div class="workspace-header">
+            <div>
+              <div class="eyebrow">Conversation QA</div>
+              <h2>Query Results</h2>
+              <p id="qaStatusText" class="workspace-copy">Submit a prefixed question to query the corpus.</p>
+            </div>
+          </div>
+          <div id="qaResultPanel" class="qa-result-panel">
+            <div class="empty-state">No QA result yet.</div>
+          </div>
+        </section>
 
         <section class="workspace">
           <div class="workspace-header">

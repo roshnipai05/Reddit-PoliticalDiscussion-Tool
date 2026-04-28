@@ -26,8 +26,16 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_json_if_exists(path: Path, default: Any) -> Any:
+    if path.exists():
+        return load_json(path)
+    return default
+
+
 def load_comment_preview(path: Path, per_topic: int = 12) -> dict[int, list[dict[str, Any]]]:
     preview: dict[int, list[dict[str, Any]]] = {}
+    if not path.exists():
+        return preview
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
@@ -91,9 +99,17 @@ def build_bundle() -> dict[str, Any]:
     aggregate = load_json(DATA_DIR / "topic_analysis" / "aggregate_stats.json")
     topic_run = load_json(DATA_DIR / "topic_analysis" / "run_metadata.json")
     topics = load_json(DATA_DIR / "topic_analysis" / "topic_summary.json")
-    stance_preview = load_json(DATA_DIR / "topic_stance_preview" / "topic_stance_summary.json")
-    stance_meta = load_json(DATA_DIR / "topic_stance_preview" / "run_metadata.json")
-    user_groups = load_json(DATA_DIR / "topic_stance_preview" / "topic_user_stance_groups.json")
+    stance_preview = load_json_if_exists(DATA_DIR / "topic_stance_preview" / "topic_stance_summary.json", [])
+    stance_meta = load_json_if_exists(
+        DATA_DIR / "topic_stance_preview" / "run_metadata.json",
+        {
+            "output_dir": str(DATA_DIR / "topic_stance_preview"),
+            "comment_count_analyzed": 0,
+            "topic_count_analyzed": 0,
+            "status": "missing",
+        },
+    )
+    user_groups = load_json_if_exists(DATA_DIR / "topic_stance_preview" / "topic_user_stance_groups.json", [])
     comment_preview = load_comment_preview(DATA_DIR / "topic_stance_preview" / "comment_stances.csv")
 
     stance_by_topic = {int(item["topic_id"]): item for item in stance_preview}
@@ -136,7 +152,7 @@ def build_bundle() -> dict[str, Any]:
             "title": "Political Discussion Analysis Explorer",
             "subreddit": subreddit_name,
             "analysis_scope": "Project Part 1 tasks 1.1-1.4",
-            "stance_mode": "topic_level_preview",
+            "stance_mode": "topic_level_preview" if stance_preview else "unavailable",
             "month_axis": month_axis,
             "events": events_in_range,
         },

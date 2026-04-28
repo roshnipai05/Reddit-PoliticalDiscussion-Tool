@@ -1,10 +1,44 @@
 const state = {
   bundle: null,
+  appStatus: null,
   activeTopicId: null,
   expandedMajorTopics: new Set(),
   zoom: 1,
-  hindiMode: false,
+  language: "en",
+  queryTypeMenuOpen: false,
+  qaResult: null,
+  qaBusy: false,
+  pipelineBusy: false,
+  pipelineLog: "No pipeline action has been run yet.",
 };
+
+const QUESTION_TYPES = [
+  {
+    prefix: "focused:",
+    label: "Focused",
+    example: 'focused: "What are users saying about Biden dropping out?"',
+  },
+  {
+    prefix: "aggregate:",
+    label: "Aggregate",
+    example: 'aggregate: "What topics dominate the corpus?"',
+  },
+  {
+    prefix: "comparison:",
+    label: "Comparison",
+    example: 'comparison: "How does discussion of Harris differ from Trump?"',
+  },
+  {
+    prefix: "multi-hop:",
+    label: "Multi-hop",
+    example: 'multi-hop: "How did views on Harris shift after Biden dropped out?"',
+  },
+];
+
+const DEFAULT_QUERY_HINT =
+  "Prefix each question with `focused:`, `aggregate:`, `comparison:`, or `multi-hop:`. Click the bar to see examples.";
+const INVALID_QUERY_HINT =
+  "Question type prefix required. Start with focused:, aggregate:, comparison:, or multi-hop:.";
 
 const els = {
   subredditLabel: document.getElementById("subredditLabel"),
@@ -22,18 +56,43 @@ const els = {
   zoomOut: document.getElementById("zoomOut"),
   zoomLabel: document.getElementById("zoomLabel"),
   languageToggle: document.getElementById("languageToggle"),
+  modelSelect: document.getElementById("modelSelect"),
+  askButton: document.getElementById("askButton"),
+  conversationInput: document.getElementById("conversationInput"),
+  queryTypeMenu: document.getElementById("queryTypeMenu"),
+  queryTypeHint: document.getElementById("queryTypeHint"),
+  qaStatusText: document.getElementById("qaStatusText"),
+  qaResultPanel: document.getElementById("qaResultPanel"),
+  refreshStatusButton: document.getElementById("refreshStatusButton"),
+  rebuildBundleButton: document.getElementById("rebuildBundleButton"),
+  runTopicAnalysisButton: document.getElementById("runTopicAnalysisButton"),
+  runStanceAnalysisButton: document.getElementById("runStanceAnalysisButton"),
+  pipelineStatus: document.getElementById("pipelineStatus"),
 };
 
+async function apiFetch(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed with status ${response.status}`);
+  }
+  return payload;
+}
+
 function formatNumber(value) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value ?? 0);
 }
 
 function formatPercent(value) {
-  return `${(value * 100).toFixed(1)}%`;
+  return `${((value || 0) * 100).toFixed(1)}%`;
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -44,8 +103,66 @@ function trendClass(value) {
   return String(value || "").toLowerCase();
 }
 
+function normalizeQuestionPrefix(value) {
+  return String(value || "").trimStart().toLowerCase();
+}
+
+function hasValidQuestionPrefix(value) {
+  const normalized = normalizeQuestionPrefix(value);
+  return QUESTION_TYPES.some((item) => normalized.startsWith(item.prefix));
+}
+
+function setQueryHint(message, isError = false) {
+  els.queryTypeHint.textContent = message;
+  els.queryTypeHint.classList.toggle("is-error", isError);
+}
+
+function renderQueryTypeMenu() {
+  els.queryTypeMenu.innerHTML = QUESTION_TYPES.map(
+    (item) => `
+      <button class="query-type-option" type="button" data-prefix="${item.prefix}">
+        <span class="query-type-label">${item.label}</span>
+        <span class="query-type-example">${escapeHtml(item.example)}</span>
+      </button>
+    `
+  ).join("");
+
+  [...els.queryTypeMenu.querySelectorAll(".query-type-option")].forEach((button) => {
+    button.addEventListener("click", () => {
+      els.conversationInput.value = `${button.dataset.prefix} ""`;
+      els.conversationInput.focus();
+      els.conversationInput.setSelectionRange(
+        button.dataset.prefix.length + 2,
+        button.dataset.prefix.length + 2
+      );
+      validateConversationInput();
+      closeQueryTypeMenu();
+    });
+  });
+}
+
+function openQueryTypeMenu() {
+  state.queryTypeMenuOpen = true;
+  els.queryTypeMenu.hidden = false;
+}
+
+function closeQueryTypeMenu() {
+  state.queryTypeMenuOpen = false;
+  els.queryTypeMenu.hidden = true;
+}
+
+function validateConversationInput() {
+  const hasPrefix = hasValidQuestionPrefix(els.conversationInput.value);
+  const isEmpty = !els.conversationInput.value.trim();
+  const isInvalid = !isEmpty && !hasPrefix;
+  els.conversationInput.classList.toggle("invalid-prefix", isInvalid);
+  setQueryHint(isInvalid ? INVALID_QUERY_HINT : DEFAULT_QUERY_HINT, isInvalid);
+  return !isInvalid;
+}
+
 function getTopicById(topicId) {
-  return state.bundle.topics.find((topic) => Number(topic.topic_id) === Number(topicId));
+  if (!state.bundle) return null;
+  return state.bundle.topics.find((topic) => Number(topic.topic_id) === Number(topicId)) || null;
 }
 
 function currentMonthFilter() {
@@ -79,15 +196,27 @@ function topicMatchesFilters(topic) {
 }
 
 function filteredTree() {
+  if (!state.bundle) return [];
   return state.bundle.topic_tree
     .map((majorTopic) => ({
       ...majorTopic,
-      children: majorTopic.children.filter((child) => topicMatchesFilters(getTopicById(child.topic_id))),
+      children: majorTopic.children.filter((child) => {
+        const topic = getTopicById(child.topic_id);
+        return topic ? topicMatchesFilters(topic) : false;
+      }),
     }))
     .filter((majorTopic) => majorTopic.children.length > 0);
 }
 
 function renderOverview() {
+  if (!state.bundle) {
+    els.subredditLabel.textContent = "Bundle not loaded";
+    els.overviewStats.innerHTML = '<article class="metric-card"><div class="metric-label">Status</div><div class="metric-value">No bundle</div></article>';
+    els.aggregateGrid.innerHTML = '<div class="sidebar-stat"><div class="metric-label">Bundle</div><div class="sidebar-value">Missing</div></div>';
+    els.qualityPanel.innerHTML = '<div class="quality-item"><strong>Waiting for bundle</strong><p>Build or rebuild the bundle from the pipeline panel.</p></div>';
+    return;
+  }
+
   const bundle = state.bundle;
   els.subredditLabel.textContent = `${bundle.app_meta.subreddit} • ${bundle.app_meta.analysis_scope}`;
 
@@ -96,7 +225,7 @@ function renderOverview() {
     ["Model Topics", bundle.overview.topic_count],
     ["Trending", bundle.overview.trending_topics],
     ["Persistent", bundle.overview.persistent_topics],
-    ["Comments Analyzed", bundle.stance_preview_metadata.comment_count_analyzed],
+    ["Comments Analyzed", bundle.stance_preview_metadata.comment_count_analyzed || 0],
   ];
   els.overviewStats.innerHTML = cards
     .map(
@@ -130,6 +259,7 @@ function renderOverview() {
     )
     .join("");
 
+  const stanceReady = bundle.app_meta.stance_mode !== "unavailable";
   els.qualityPanel.innerHTML = `
     <div class="quality-item">
       <strong>Topic coverage</strong>
@@ -143,29 +273,34 @@ function renderOverview() {
     </div>
     <div class="quality-item">
       <strong>Stance preview</strong>
-      <p>${formatNumber(
-        bundle.stance_preview_metadata.comment_count_analyzed
-      )} comments were grouped into support/opposition previews across ${bundle.stance_preview_metadata.topic_count_analyzed} major topics.</p>
+      <p>${
+        stanceReady
+          ? `${formatNumber(bundle.stance_preview_metadata.comment_count_analyzed || 0)} comments were grouped into support/opposition previews across ${bundle.stance_preview_metadata.topic_count_analyzed || 0} major topics.`
+          : "Stance preview outputs are not available yet. Topic exploration still works."
+      }</p>
     </div>
   `;
 }
 
 function initFilters() {
+  els.flairFilter.innerHTML = '<option value="all">All flairs</option>';
+  els.dateFilter.innerHTML = '<option value="all">All months</option>';
+  if (!state.bundle) {
+    return;
+  }
+
   const flairs = new Set();
   state.bundle.topics.forEach((topic) => {
     (topic.top_flairs || []).forEach((item) => flairs.add(item.flair));
   });
-  els.flairFilter.innerHTML = '<option value="all">All flairs</option>';
-  [...flairs]
-    .sort()
-    .forEach((flair) => {
-      const option = document.createElement("option");
-      option.value = flair;
-      option.textContent = flair;
-      els.flairFilter.append(option);
-    });
 
-  els.dateFilter.innerHTML = '<option value="all">All months</option>';
+  [...flairs].sort().forEach((flair) => {
+    const option = document.createElement("option");
+    option.value = flair;
+    option.textContent = flair;
+    els.flairFilter.append(option);
+  });
+
   state.bundle.app_meta.month_axis.forEach((month) => {
     const option = document.createElement("option");
     option.value = month;
@@ -175,6 +310,12 @@ function initFilters() {
 }
 
 function renderTopicTree() {
+  if (!state.bundle) {
+    els.topicCountLabel.textContent = "Topic bundle unavailable";
+    els.topicTree.innerHTML = '<div class="empty-state">Build the app bundle to browse topics.</div>';
+    return;
+  }
+
   const majorTopics = filteredTree();
   const filteredTopicCount = majorTopics.reduce((sum, node) => sum + node.children.length, 0);
   els.topicCountLabel.textContent = `${filteredTopicCount} topics visible across ${majorTopics.length} major groups`;
@@ -183,9 +324,8 @@ function renderTopicTree() {
     return;
   }
 
-  const scale = state.zoom.toFixed(2);
   els.zoomLabel.textContent = `${Math.round(state.zoom * 100)}%`;
-  els.topicTree.style.transform = `scale(${scale})`;
+  els.topicTree.style.transform = `scale(${state.zoom.toFixed(2)})`;
   els.topicTree.style.transformOrigin = "top left";
 
   els.topicTree.innerHTML = majorTopics
@@ -214,7 +354,7 @@ function renderTopicTree() {
                       <div class="topic-node-title">${escapeHtml(child.label)}</div>
                       <span class="badge ${trendClass(child.trend_type)}">${child.trend_type}</span>
                     </div>
-                    <div class="topic-node-copy">${escapeHtml(topic.topic_description)}</div>
+                    <div class="topic-node-copy">${escapeHtml(topic?.topic_description || "")}</div>
                     <div class="topic-node-meta">
                       <span>${formatPercent(child.topic_share)}</span>
                       <span>${formatNumber(child.post_count)} posts</span>
@@ -273,7 +413,6 @@ function renderTimeline(topic) {
   const height = 220;
   const padding = 24;
   const points = polylinePoints(timeline.post_counts, width, height, padding);
-
   const eventMarkers = (timeline.events || [])
     .map((event) => {
       const monthIndex = timeline.months.indexOf(event.month);
@@ -459,24 +598,223 @@ function ensureValidActiveTopic() {
   });
 }
 
+function renderPipelineStatus() {
+  const status = state.appStatus;
+  if (!status) {
+    els.pipelineStatus.innerHTML = '<div class="quality-item">Status not loaded yet.</div>';
+    return;
+  }
+
+  const topicReady = status.topic_analysis?.ready ? "Ready" : "Missing";
+  const stanceReady = status.stance_analysis?.ready ? "Ready" : "Missing";
+  const ragReady = status.rag?.index_ready ? "Ready" : "Missing";
+  const bundleReady = status.app?.bundle_exists ? "Ready" : "Missing";
+  els.pipelineStatus.innerHTML = `
+    <div class="quality-item">
+      <strong>Backend status</strong>
+      <p>Bundle: ${bundleReady} • RAG index: ${ragReady} • Topic analysis: ${topicReady} • Stance preview: ${stanceReady}</p>
+    </div>
+    <pre class="pipeline-log">${escapeHtml(state.pipelineLog)}</pre>
+  `;
+}
+
+function renderQaResult() {
+  if (!state.qaResult) {
+    els.qaResultPanel.innerHTML = '<div class="empty-state">No QA result yet.</div>';
+    return;
+  }
+
+  const result = state.qaResult;
+  const answerCandidates = [result.groq_answer, result.gemini_answer].filter(Boolean);
+  const answer =
+    answerCandidates.find((item) => !String(item).startsWith("[")) ||
+    answerCandidates[0] ||
+    "No answer returned.";
+  const sources = (result.source_posts || [])
+    .map(
+      (post) => `
+        <article class="post-card">
+          <div class="post-title">${escapeHtml(post.title)}</div>
+          <div class="detail-meta">
+            <span>${escapeHtml(post.flair)}</span>
+            <span>sim ${Number(post.cosine_sim).toFixed(4)}</span>
+            <span>${formatNumber(post.score)} score</span>
+            <span>${escapeHtml(post.created_month)}</span>
+          </div>
+          ${post.permalink ? `<a href="${escapeHtml(post.permalink)}" target="_blank" rel="noreferrer">Open Reddit thread</a>` : ""}
+        </article>
+      `
+    )
+    .join("");
+
+  els.qaStatusText.textContent = `Last query ran in ${result.query_type} mode using ${result.lang.toUpperCase()} input.`;
+  els.qaResultPanel.innerHTML = `
+    <div class="qa-grid">
+      <article class="qa-card">
+        <div class="detail-subtitle">Answer</div>
+        <div class="qa-meta">
+          <span>Mode: ${escapeHtml(result.query_type)}</span>
+          <span>Model: ${escapeHtml(els.modelSelect.value)}</span>
+          <span>Max similarity: ${Number(result.max_cosine_sim || 0).toFixed(4)}</span>
+          <span>${result.no_answer_flag ? "Low-confidence route" : "Evidence-backed route"}</span>
+        </div>
+        <div class="qa-answer">${escapeHtml(answer)}</div>
+      </article>
+      <article class="qa-card">
+        <div class="detail-subtitle">Route metadata</div>
+        <pre class="pipeline-log">${escapeHtml(JSON.stringify(result.route_metadata || {}, null, 2))}</pre>
+      </article>
+    </div>
+    <div class="qa-card">
+      <div class="detail-subtitle">Top retrieved posts</div>
+      <div class="qa-source-list">${sources || '<div class="muted">No source posts returned.</div>'}</div>
+    </div>
+  `;
+}
+
 function render() {
   ensureValidActiveTopic();
+  renderOverview();
   renderTopicTree();
   renderTopicDetail();
+  renderPipelineStatus();
+  renderQaResult();
+}
+
+async function loadBundle() {
+  try {
+    state.bundle = await apiFetch(`/api/bundle?ts=${Date.now()}`, { method: "GET" });
+    state.expandedMajorTopics = new Set((state.bundle.topic_tree || []).slice(0, 2).map((node) => node.id));
+  } catch (error) {
+    state.bundle = null;
+    state.pipelineLog = `Bundle load failed: ${error.message}`;
+  }
+}
+
+async function loadStatus() {
+  try {
+    state.appStatus = await apiFetch("/api/status", { method: "GET" });
+  } catch (error) {
+    state.appStatus = null;
+    state.pipelineLog = `Status load failed: ${error.message}`;
+  }
+}
+
+async function refreshAppData() {
+  await Promise.all([loadBundle(), loadStatus()]);
+  initFilters();
+  render();
+}
+
+function setQaBusy(isBusy) {
+  state.qaBusy = isBusy;
+  els.askButton.disabled = isBusy;
+  els.askButton.textContent = isBusy ? "Running..." : "Run QA";
+}
+
+async function submitQuery() {
+  if (!validateConversationInput()) {
+    return;
+  }
+
+  const question = els.conversationInput.value.trim();
+  if (!question) {
+    return;
+  }
+
+  setQaBusy(true);
+  els.qaStatusText.textContent = "Query in progress...";
+  try {
+    state.qaResult = await apiFetch("/api/query", {
+      method: "POST",
+      body: JSON.stringify({
+        question,
+        lang: state.language,
+        model: els.modelSelect.value,
+        query_type: "auto",
+      }),
+    });
+    renderQaResult();
+  } catch (error) {
+    state.qaResult = {
+      query_type: "error",
+      lang: state.language,
+      max_cosine_sim: 0,
+      no_answer_flag: true,
+      route_metadata: {},
+      source_posts: [],
+      groq_answer: `Query failed: ${error.message}`,
+      gemini_answer: null,
+    };
+    renderQaResult();
+  } finally {
+    setQaBusy(false);
+  }
+}
+
+function setPipelineBusy(isBusy, button = null) {
+  state.pipelineBusy = isBusy;
+  [
+    els.refreshStatusButton,
+    els.rebuildBundleButton,
+    els.runTopicAnalysisButton,
+    els.runStanceAnalysisButton,
+  ].forEach((element) => {
+    element.disabled = isBusy;
+  });
+  if (button) {
+    button.textContent = isBusy ? "Running..." : button.dataset.label;
+  }
+}
+
+async function runPipelineAction(button, endpoint, successLabel, rebuildBundleAfter = false) {
+  setPipelineBusy(true, button);
+  state.pipelineLog = `${successLabel} started...`;
+  renderPipelineStatus();
+  try {
+    const result = await apiFetch(endpoint, { method: "POST", body: "{}" });
+    let rebuildResult = null;
+    if (result.ok && rebuildBundleAfter) {
+      rebuildResult = await apiFetch("/api/actions/rebuild-bundle", { method: "POST", body: "{}" });
+    }
+    state.pipelineLog = [
+      `${successLabel}: ${result.ok ? "completed" : "failed"}`,
+      "",
+      "STDOUT:",
+      result.stdout || "(no stdout)",
+      "",
+      "STDERR:",
+      result.stderr || "(no stderr)",
+      ...(rebuildResult
+        ? [
+            "",
+            "Bundle rebuild:",
+            rebuildResult.ok ? "completed" : "failed",
+            "",
+            "BUNDLE STDOUT:",
+            rebuildResult.stdout || "(no stdout)",
+            "",
+            "BUNDLE STDERR:",
+            rebuildResult.stderr || "(no stderr)",
+          ]
+        : []),
+    ].join("\n");
+    await refreshAppData();
+  } catch (error) {
+    state.pipelineLog = `${successLabel} failed: ${error.message}`;
+    renderPipelineStatus();
+  } finally {
+    setPipelineBusy(false, button);
+  }
 }
 
 async function boot() {
-  const response = await fetch("./data.bundle.json");
-  state.bundle = await response.json();
-  state.bundle.topic_tree.slice(0, 2).forEach((node) => state.expandedMajorTopics.add(node.id));
+  renderQueryTypeMenu();
+  await refreshAppData();
 
-  initFilters();
-  renderOverview();
-  render();
-
-  [els.searchInput, els.trendFilter, els.flairFilter, els.dateFilter].forEach((el) => {
-    el.addEventListener("input", render);
-    el.addEventListener("change", render);
+  [els.searchInput, els.trendFilter, els.flairFilter, els.dateFilter].forEach((element) => {
+    element.addEventListener("input", render);
+    element.addEventListener("change", render);
   });
 
   els.zoomIn.addEventListener("click", () => {
@@ -487,11 +825,50 @@ async function boot() {
     state.zoom = Math.max(0.8, state.zoom - 0.1);
     renderTopicTree();
   });
-  els.languageToggle.addEventListener("click", () => {
-    state.hindiMode = !state.hindiMode;
-    els.languageToggle.setAttribute("aria-pressed", String(state.hindiMode));
-    els.languageToggle.textContent = `Hindi Mode: ${state.hindiMode ? "On" : "Off"}`;
+
+  els.conversationInput.addEventListener("focus", openQueryTypeMenu);
+  els.conversationInput.addEventListener("click", openQueryTypeMenu);
+  els.conversationInput.addEventListener("input", validateConversationInput);
+  els.conversationInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitQuery();
+    }
   });
+  els.conversationInput.addEventListener("blur", () => {
+    window.setTimeout(closeQueryTypeMenu, 120);
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".prompt-box")) {
+      closeQueryTypeMenu();
+    }
+  });
+
+  els.languageToggle.addEventListener("click", () => {
+    state.language = state.language === "en" ? "hi" : "en";
+    const hindiMode = state.language === "hi";
+    els.languageToggle.setAttribute("aria-pressed", String(hindiMode));
+    els.languageToggle.textContent = `Hindi Mode: ${hindiMode ? "On" : "Off"}`;
+  });
+
+  els.askButton.addEventListener("click", submitQuery);
+  els.refreshStatusButton.dataset.label = "Refresh status";
+  els.rebuildBundleButton.dataset.label = "Rebuild bundle";
+  els.runTopicAnalysisButton.dataset.label = "Run topic analysis";
+  els.runStanceAnalysisButton.dataset.label = "Run stance preview";
+  els.refreshStatusButton.addEventListener("click", refreshAppData);
+  els.rebuildBundleButton.addEventListener("click", () =>
+    runPipelineAction(els.rebuildBundleButton, "/api/actions/rebuild-bundle", "Bundle rebuild")
+  );
+  els.runTopicAnalysisButton.addEventListener("click", () =>
+    runPipelineAction(els.runTopicAnalysisButton, "/api/actions/run-topic-analysis", "Topic analysis", true)
+  );
+  els.runStanceAnalysisButton.addEventListener("click", () =>
+    runPipelineAction(els.runStanceAnalysisButton, "/api/actions/run-stance-analysis", "Stance preview", true)
+  );
+
+  validateConversationInput();
+  render();
 }
 
 boot();

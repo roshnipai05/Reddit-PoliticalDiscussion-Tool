@@ -34,6 +34,8 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from llm_summaries import groq_available, groq_json_completion
+
 
 DEFAULT_SEED = 42
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
@@ -85,6 +87,27 @@ STANCE_STOPWORDS = {
     "biden",
     "harris",
     "voters",
+    "year",
+    "years",
+    "going",
+    "say",
+    "says",
+    "said",
+    "state",
+    "states",
+    "president",
+    "time",
+    "vote",
+    "votes",
+    "voting",
+    "campaign",
+    "need",
+    "way",
+    "things",
+    "point",
+    "kind",
+    "lot",
+    "really",
 }
 SUPPORT_CUES = {
     "agree",
@@ -127,6 +150,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-cache-dir", default="data/models/huggingface")
     parser.add_argument("--min-comments-per-topic", type=int, default=MIN_COMMENTS_PER_TOPIC)
     parser.add_argument("--disable-hf-ssl-verify", action="store_true")
+    parser.add_argument("--disable-groq-summaries", action="store_true")
     parser.add_argument(
         "--topic-ids",
         default="",
@@ -301,11 +325,107 @@ def cluster_keywords(texts: list[str], top_n: int = 10) -> list[str]:
     keywords: list[str] = []
     for index in top_indices:
         token = feature_names[index]
-        if token not in STANCE_STOPWORDS and token not in keywords:
+        token_parts = token.split()
+        if len(token_parts) == 1 and token in STANCE_STOPWORDS:
+            continue
+        if any(part in STANCE_STOPWORDS for part in token_parts):
+            continue
+        score = float(mean_scores[index]) * (1.0 + 0.35 * min(len(token_parts), 3))
+        if len(token_parts) == 1:
+            score *= 0.7
+        if score < 0.015:
+            continue
+        if token not in keywords:
             keywords.append(token)
         if len(keywords) == top_n:
             break
     return keywords
+
+
+def format_theme_list(themes: list[str], limit: int = 3) -> str:
+    picked = [theme for theme in themes[:limit] if theme]
+    if not picked:
+        return "mixed lines of argument"
+    if len(picked) == 1:
+        return picked[0]
+    if len(picked) == 2:
+        return f"{picked[0]} and {picked[1]}"
+    return f"{picked[0]}, {picked[1]}, and {picked[2]}"
+
+
+def distinctive_themes(primary: list[str], secondary: list[str], limit: int = 3) -> list[str]:
+    secondary_tokens = {item.lower() for item in secondary}
+    distinct = [theme for theme in primary if theme.lower() not in secondary_tokens]
+    return distinct[:limit] if distinct else primary[:limit]
+
+
+def summarize_comment_frames(representative_comments: list[dict[str, Any]], limit: int = 2) -> str:
+    excerpts = [normalize_excerpt(item["excerpt"], limit=120) for item in representative_comments[:limit] if item.get("excerpt")]
+    if not excerpts:
+        return ""
+    return "; ".join(excerpts)
+
+
+def generate_stance_summaries_generative(
+    topic_label: str,
+    support_keywords: list[str],
+    opposing_keywords: list[str],
+    support_representative_comments: list[dict[str, Any]],
+    opposing_representative_comments: list[dict[str, Any]],
+    disable_groq_summaries: bool,
+) -> dict[str, str]:
+    fallback = {
+        "dominant_position_summary": infer_dominant_position(
+            topic_label,
+            support_keywords,
+            support_representative_comments,
+            opposing_keywords,
+        ),
+        "support_argument_summary": summarize_cluster_arguments(
+            "support",
+            topic_label,
+            support_keywords,
+            support_representative_comments,
+            opposing_keywords,
+        ),
+        "opposing_argument_summary": summarize_cluster_arguments(
+            "opposing",
+            topic_label,
+            opposing_keywords,
+            opposing_representative_comments,
+            support_keywords,
+        ),
+    }
+    if disable_groq_summaries or not groq_available():
+        return fallback
+
+    try:
+        system_prompt = (
+            "You are summarizing stance clusters inside a political discussion topic. "
+            "Return strict JSON with keys `dominant_position_summary`, `support_argument_summary`, and `opposing_argument_summary`. "
+            "Each value should be 2 to 3 sentences, analytical, and grounded in the supplied themes and representative comments. "
+            "Focus on the claims and reasoning patterns, not just repeated words."
+        )
+        support_examples = "\n".join(f"- {item.get('excerpt', '')}" for item in support_representative_comments[:4])
+        opposing_examples = "\n".join(f"- {item.get('excerpt', '')}" for item in opposing_representative_comments[:4])
+        user_prompt = (
+            f"Topic label: {topic_label}\n"
+            f"Support-side themes: {', '.join(support_keywords[:8])}\n"
+            f"Opposing-side themes: {', '.join(opposing_keywords[:8])}\n"
+            f"Support-side representative comments:\n{support_examples}\n\n"
+            f"Opposing-side representative comments:\n{opposing_examples}\n\n"
+            "Return JSON only."
+        )
+        result = groq_json_completion(system_prompt, user_prompt, max_tokens=520)
+        cleaned = {
+            key: normalize_excerpt(str(result.get(key, "")).replace("\n", " "), limit=520)
+            for key in fallback
+        }
+        if all(cleaned.values()):
+            return cleaned
+        return fallback
+    except Exception:
+        return fallback
 
 
 def representative_comment_records(
@@ -339,32 +459,36 @@ def summarize_cluster_arguments(
     topic_label: str,
     keywords: list[str],
     representative_comments: list[dict[str, Any]],
+    opposing_keywords: list[str],
 ) -> str:
-    keyphrase_text = ", ".join(keywords[:5]) if keywords else "mixed arguments"
-    preview = " ".join(item["excerpt"] for item in representative_comments[:2]).strip()
-    if preview:
-        preview = normalize_excerpt(preview, limit=240)
-        return (
-            f"In the {topic_label.lower()} discussion, {stance_name} comments mainly focus on "
-            f"{keyphrase_text}. Typical arguments include: {preview}"
-        )
-    return f"In the {topic_label.lower()} discussion, {stance_name} comments mainly focus on {keyphrase_text}."
+    lead_themes = distinctive_themes(keywords, opposing_keywords, limit=3)
+    contrast_themes = distinctive_themes(opposing_keywords, keywords, limit=2)
+    evidence_text = summarize_comment_frames(representative_comments, limit=2)
+    sentence = (
+        f"Within the {topic_label.lower()} discussion, {stance_name}-side comments mainly argue through "
+        f"{format_theme_list(lead_themes)}."
+    )
+    if contrast_themes:
+        sentence += f" Compared with the other side, they put relatively more weight on {format_theme_list(contrast_themes, limit=2)}."
+    if evidence_text:
+        sentence += f" Representative comments repeatedly return to points such as {evidence_text}."
+    return sentence
 
 
 def infer_dominant_position(
     topic_label: str,
     dominant_keywords: list[str],
     representative_comments: list[dict[str, Any]],
+    opposing_keywords: list[str],
 ) -> str:
-    keyphrase_text = ", ".join(dominant_keywords[:5]) if dominant_keywords else topic_label.lower()
-    preview = " ".join(item["excerpt"] for item in representative_comments[:2]).strip()
-    if preview:
-        preview = normalize_excerpt(preview, limit=220)
-        return (
-            f"For {topic_label}, the dominant position emphasizes {keyphrase_text}. "
-            f"Typical supporting comments say: {preview}"
-        )
-    return f"For {topic_label}, the dominant position emphasizes {keyphrase_text}."
+    dominant_themes = distinctive_themes(dominant_keywords, opposing_keywords, limit=3)
+    evidence_text = summarize_comment_frames(representative_comments, limit=2)
+    sentence = (
+        f"For {topic_label}, the dominant position is organized around {format_theme_list(dominant_themes)}."
+    )
+    if evidence_text:
+        sentence += f" The strongest supporting comments keep circling back to points such as {evidence_text}."
+    return sentence
 
 
 def build_user_groups(topic_comments: pd.DataFrame) -> dict[str, Any]:
@@ -419,6 +543,7 @@ def analyze_topic_comments(
     topic_comments: pd.DataFrame,
     model,
     seed: int,
+    disable_groq_summaries: bool,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     texts = topic_comments["body"].tolist()
     embeddings = model.encode(
@@ -493,6 +618,14 @@ def analyze_topic_comments(
         float(min(len(support_comments), len(opposing_comments)) / max(len(support_comments), len(opposing_comments))),
         4,
     )
+    generated_summaries = generate_stance_summaries_generative(
+        topic_label=topic_row["label"],
+        support_keywords=support_keywords,
+        opposing_keywords=opposing_keywords,
+        support_representative_comments=support_reps,
+        opposing_representative_comments=opposing_reps,
+        disable_groq_summaries=disable_groq_summaries,
+    )
 
     topic_summary = {
         "topic_id": int(topic_row["topic_id"]),
@@ -507,9 +640,9 @@ def analyze_topic_comments(
         "support_share": round(float(len(support_comments) / len(topic_comments)), 4),
         "opposing_share": round(float(len(opposing_comments) / len(topic_comments)), 4),
         "disagreement_index": disagreement_index,
-        "dominant_position_summary": infer_dominant_position(topic_row["label"], support_keywords, support_reps),
-        "support_argument_summary": summarize_cluster_arguments("support", topic_row["label"], support_keywords, support_reps),
-        "opposing_argument_summary": summarize_cluster_arguments("opposing", topic_row["label"], opposing_keywords, opposing_reps),
+        "dominant_position_summary": generated_summaries["dominant_position_summary"],
+        "support_argument_summary": generated_summaries["support_argument_summary"],
+        "opposing_argument_summary": generated_summaries["opposing_argument_summary"],
         "support_keywords": support_keywords,
         "opposing_keywords": opposing_keywords,
         "support_representative_comments": support_reps,
@@ -655,7 +788,13 @@ def main() -> None:
         ).reset_index(drop=True)
         topic_row = topic_summary_rows[int(topic_id)]
         topic_comments["topic_label"] = topic_row["label"]
-        analyzed_comments, topic_info = analyze_topic_comments(topic_row, topic_comments, model, args.seed)
+        analyzed_comments, topic_info = analyze_topic_comments(
+            topic_row,
+            topic_comments,
+            model,
+            args.seed,
+            args.disable_groq_summaries,
+        )
         topic_comment_frames.append(analyzed_comments)
         topic_summaries.append(topic_info)
 
@@ -670,6 +809,7 @@ def main() -> None:
         "embedding_model": args.embedding_model,
         "model_cache_dir": str(model_cache_dir),
         "disable_hf_ssl_verify": args.disable_hf_ssl_verify,
+        "disable_groq_summaries": args.disable_groq_summaries,
         "min_comments_per_topic": args.min_comments_per_topic,
         "topic_ids": sorted(requested_topic_ids),
         "max_topics": args.max_topics,
