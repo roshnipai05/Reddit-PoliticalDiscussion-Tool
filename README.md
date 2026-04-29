@@ -1,4 +1,5 @@
-<img src="assets\header.jpg" style="width:100%; height:150px; object-fit:cover; border-radius:8px;">
+<img src="assets\header-4.jpg" style="width:100%; height:25%; object-fit:cover; border-radius:8px;">
+<br><br>
 
 # Reddit Political Discussion Analysis
 
@@ -11,17 +12,17 @@ The tool combines an offline analysis pipeline with an interactive local web app
 The application is built around a few connected analysis features:
 
 - **Corpus overview:** shows dataset-wide statistics such as post volume, user count, date range, and other aggregate properties of the collected Reddit data.
-![Alt text](assets\Agg-Stats.jpg)
+<img src="assets\Agg-Stats.jpg">
 - **Topic map:** groups posts into analyst-readable political issue areas and then further into broader major domains such as elections, institutions, economy, rights, foreign policy, and media narratives.
-![Alt text](assets\Topic-Map.jpg)
+<img src="assets\Topic-Map.jpg">
 - **Trend monitoring:** identifies whether a topic is persistent, trending, declining, or episodic across the July--December 2024 time window.
 - **Stance preview:** approximates disagreement inside each topic by splitting comments into two discourse camps and summarising the dominant and opposing arguments.
-![Alt text](assets\Stance-Analysis.jpg)
+<img src="assets\Stance-Analysis.jpg">
 - **User demographics / participation overlap:** lets the user compare selected topics and inspect how much their participant bases overlap. This is useful for understanding whether the same repeat users are driving multiple discussions.
-![Alt text](assets\User-Demographics.jpg)
+<img src="assets\User-Demographics.jpg">
 
 - **Conversation QA:** supports question answering over the corpus through routed query modes, including focused, aggregate, comparison, and multi-hop questions.
-![Alt text](assets\Query-System.jpg)
+<img src="assets\Query-System.jpg"
 - **Multilingual access:** supports translation-based querying so the same English corpus can be explored through Hindi and other supported languages.
 
 ## How It Can Be Used as a Data Analysis Tool
