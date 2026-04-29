@@ -1,5 +1,4 @@
-<img src="assets\header-4.jpg" style="width:100%; height:130px; object-fit:cover; border-radius:8px;">
-<br>
+<img src="assets\header.jpg" style="width:100%; object-fit:cover; border-radius:8px;">
 
 # Reddit Political Discussion Analysis
 
