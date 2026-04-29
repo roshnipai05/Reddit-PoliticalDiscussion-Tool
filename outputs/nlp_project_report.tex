@@ -1,0 +1,578 @@
+\documentclass[11pt,a4paper]{article}
+
+% ─── Packages ────────────────────────────────────────────────────────────────
+\usepackage[a4paper, top=2.2cm, bottom=2.2cm, left=2.4cm, right=2.4cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{titling}
+\usepackage{fancyhdr}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{mdframed}
+\usepackage{tcolorbox}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\tcbuselibrary{skins, breakable}
+
+% ─── Colour Palette ──────────────────────────────────────────────────────────
+\definecolor{navyblue}{HTML}{1B2A4A}
+\definecolor{accentred}{HTML}{C0392B}
+\definecolor{gold}{HTML}{B8860B}
+\definecolor{softgreen}{HTML}{2E7D5C}
+\definecolor{lightbg}{HTML}{F5F0E8}
+\definecolor{midgray}{HTML}{6B7280}
+\definecolor{rulecolor}{HTML}{D4C9B0}
+\definecolor{codebg}{HTML}{EDE8DC}
+\definecolor{highlightblue}{HTML}{2563EB}
+
+% ─── Hyperref Setup ──────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=navyblue,
+  urlcolor=highlightblue,
+  citecolor=softgreen,
+  pdftitle={NLP Project Report - Reddit Political Discussion Analysis},
+  pdfauthor={CS-4420-1}
+}
+
+% ─── Section Formatting ──────────────────────────────────────────────────────
+\titleformat{\section}
+  {\color{navyblue}\large\bfseries}
+  {\color{accentred}\thesection.}{0.6em}{}[{\color{rulecolor}\titlerule[0.8pt]}]
+
+\titleformat{\subsection}
+  {\color{navyblue}\normalsize\bfseries}
+  {\color{midgray}\thesubsection.}{0.5em}{}
+
+\titleformat{\subsubsection}
+  {\color{navyblue}\small\bfseries\itshape}
+  {\color{midgray}\thesubsubsection.}{0.4em}{}
+
+\titlespacing{\section}{0pt}{14pt}{6pt}
+\titlespacing{\subsection}{0pt}{10pt}{4pt}
+\titlespacing{\subsubsection}{0pt}{8pt}{3pt}
+
+% ─── Header / Footer ─────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{midgray}\textit{NLP Project Report --- r/PoliticalDiscussion Analysis}}
+\fancyhead[R]{\small\color{midgray}CS-4420-1 $\cdot$ Ashoka University}
+\fancyfoot[C]{\small\color{midgray}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{rulecolor}\leaders\hrule height \headrulewidth\hfill}}
+
+% ─── Custom Boxes ────────────────────────────────────────────────────────────
+\tcbset{
+  designbox/.style={
+    enhanced, breakable,
+    colback=lightbg, colframe=navyblue,
+    arc=4pt, boxrule=1pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt,
+    fonttitle=\bfseries\color{navyblue},
+    attach boxed title to top left={yshift=-2mm, xshift=6mm},
+    boxed title style={colback=navyblue, colframe=navyblue, arc=2pt}
+  },
+  metricbox/.style={
+    enhanced, colback=navyblue!8, colframe=navyblue,
+    arc=3pt, boxrule=0.8pt,
+    left=6pt, right=6pt, top=5pt, bottom=5pt
+  },
+  warningbox/.style={
+    enhanced, colback=gold!10, colframe=gold,
+    arc=3pt, boxrule=0.8pt,
+    left=6pt, right=6pt, top=5pt, bottom=5pt
+  }
+}
+
+% ─── List Settings ───────────────────────────────────────────────────────────
+\setlist[itemize]{leftmargin=1.4em, itemsep=2pt, topsep=4pt}
+\setlist[enumerate]{leftmargin=1.6em, itemsep=2pt, topsep=4pt}
+
+% ─── Title Block ─────────────────────────────────────────────────────────────
+\pretitle{\begin{center}\color{navyblue}\LARGE\bfseries}
+\posttitle{\end{center}}
+\preauthor{\begin{center}\color{midgray}\normalsize}
+\postauthor{\end{center}}
+\predate{\begin{center}\color{midgray}\small}
+\postdate{\end{center}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ──── Title Page ─────────────────────────────────────────────────────────────
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{1.8cm}
+
+{\large\bfseries ASHOKA UNIVERSITY}\\[0.2cm]
+{\normalsize Department of Computer Science}\\[0.15cm]
+{\normalsize Natural Language Processing: Theory and Applications (CS-4420-1)}\\[2.2cm]
+
+{\LARGE\bfseries Reddit Political Discussion Analysis System}\\[0.5cm]
+{\large Topic Modelling, Stance Detection, RAG, and Multilingual Evaluation}\\[2.0cm]
+
+\rule{0.78\textwidth}{0.6pt}\\[0.6cm]
+\begin{tabular}{ll}
+\textbf{Corpus:} & \texttt{r/PoliticalDiscussion} \\
+\textbf{Posts scraped:} & 13{,}766 posts (July -- December 2024) \\
+\textbf{Topics found:} & 13 refined issue-area topics \\
+\textbf{LLMs used:} & LLaMA 3.1 (Groq) and Gemini 1.5 Flash \\
+\textbf{Project scope:} & Part 1 (Interactive App) and Part 2 (RAG, Translation, Bias, Ethics) \\
+\end{tabular}\\[0.6cm]
+\rule{0.78\textwidth}{0.6pt}
+
+\vfill
+
+\begin{tabular}{c}
+\textbf{Submitted in partial fulfilment of course requirements} \\
+Academic Year 2025--26
+\end{tabular}
+
+\end{center}
+\end{titlepage}
+
+% ──── Table of Contents ──────────────────────────────────────────────────────
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Introduction and System Overview}
+% =============================================================================
+
+This report documents the design, implementation, and evaluation of a two-part NLP project built on \texttt{r/PoliticalDiscussion}, a Reddit community dedicated to substantive, rule-enforced political debate. The subreddit was chosen because (a) its moderation norms produce comparatively high-quality discourse relative to \texttt{r/politics} and \texttt{r/conspiracies} that were considered, (b) its six-month window (July--December 2024) captures a historically dense news cycle surrounding the 2024 US election, and (c) its flair taxonomy provides free metadata for retrieval diversity controls.
+
+The system is organised into two tightly coupled layers. \textbf{Part 1} delivers an offline analysis pipeline that models the thematic structure of the corpus and a local web application that exposes that structure to an analyst. \textbf{Part 2} extends the system with a Retrieval-Augmented Generation (RAG) question-answering engine, a Hindi (+French and Spanish) translation evaluation suite, bias detection probes, and an ethics reflection.
+
+\begin{tcolorbox}[metricbox, title=]
+\textbf{Key corpus statistics:} 13{,}766 cleaned posts $\cdot$ 7{,}285 indexed comment chunks $\cdot$ 13 refined topics $\cdot$ 6 major-domain groupings $\cdot$ July 2024 -- December 2024
+\end{tcolorbox}
+
+% =============================================================================
+\section{Part 1: Data Collection and Interactive Application}
+% =============================================================================
+
+\subsection{Data Collection}
+
+Reddit data was collected from \texttt{r/PoliticalDiscussion} using the Arctic Shift Download tool. The raw corpus was cleaned by removing deleted/removed posts and comments, filtering posts below a minimum token threshold, and normalising Unicode and whitespace. Posts were stored in \texttt{data/cleaned/posts\_clean.jsonl} with fields including post ID, title, selftext, author hash, score, flair, created UTC timestamp, and top-level comment count.
+
+\begin{table}[H]
+\centering
+\caption{Corpus Summary Statistics}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{0.88\textwidth}{>{\bfseries}l X r}
+\toprule
+\rowcolor{navyblue!10}
+Metric & Description & Value \\
+\midrule
+Total posts & After cleaning and deduplication & 13{,}766 \\
+Indexed comment chunks & Top 5 comments per post & 7{,}285 \\
+Temporal span & Months covered & July -- Dec 2024 \\
+Unique flair labels & Post-level community tags & 12+ \\
+Refined topics & Post-discovery merged topics & 13 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Feature 1.1: Aggregate Database Properties}
+
+The application's sidebar exposes a live statistics panel drawn from \texttt{data/topic\_analysis/aggregate\_stats.json}. Metrics displayed include total post count, unique author count, date range, flair distribution, average post score, and average comment count per post. These statistics refresh on demand via the \texttt{/api/status} endpoint without requiring a full pipeline rerun.
+
+\subsection{Feature 1.2: Topic Identification and Presentation}
+
+\subsubsection{Two-Stage Modeling Strategy}
+
+Topic discovery uses a two-stage pipeline rather than exposing raw BERTopic output directly. The first stage is unsupervised draft discovery:
+
+\begin{itemize}
+  \item \textbf{Embeddings:} \texttt{all-MiniLM-L6-v2} (fast, sufficient for draft clustering)
+  \item \textbf{Dimensionality reduction:} UMAP
+  \item \textbf{Clustering:} HDBSCAN with \texttt{min\_topic\_size=90}
+  \item \textbf{Keyword extraction:} BERTopic with \texttt{CountVectorizer} using political stopwords and \texttt{ngram\_range=(1,3)}; \texttt{nr\_topics=15}
+\end{itemize}
+
+The second stage is post-discovery refinement. Draft topics are relabeled via \texttt{ISSUE\_AREA\_RULES}, which use representative titles, flair distributions, raw keywords, and salient phrases extracted by \texttt{score\_title\_phrases()} to assign analyst-readable labels such as \textit{``Polling, debate performance and electoral momentum''} and \textit{``Inflation, housing costs and consumer pressure''}. Refined topics are then grouped under six major-domain categories. These were done primarily to nudge the major topics into a well-defined separation, allowing the sub-topics to also remain on theme and sharp.
+
+\begin{table}[H]
+\centering
+\caption{Major Topic Domains and Representative Issue Areas}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{0.92\textwidth}{>{\bfseries\color{navyblue}}l X}
+\toprule
+\rowcolor{navyblue!10}
+Major Domain & Example Issue-Area Labels \\
+\midrule
+Elections \& Campaigns & Polling, debate performance \& electoral momentum \\
+Institutions, Courts \& Law & Supreme Court power \& constitutional constraints \\
+Economy, Labor \& Domestic Policy & Inflation, housing costs \& consumer pressure \\
+Identity, Rights \& Social Conflict & Immigration enforcement \& border politics \\
+Foreign Policy \& Geopolitics & US foreign policy \& international alliances \\
+Parties, Media \& Political Narratives & Media framing \& partisan rhetoric \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Each topic card in the application displays: a descriptive label, its major domain, top 5--10 n-gram keywords, share of total posts, trend classification, representative post threads, and a monthly timeline.
+
+\begin{figure} [H]
+    \centering  \includegraphics[width=0.75\linewidth]{post_frequency_pertopic.png}
+    \caption{Post Frequency Relative To Major Events \\
+    \textit{Campaign strategy and voter coalition shifts - Elections \& Campaigns}}
+    \label{fig:Post Frequency Relative To Major Event}
+\end{figure}
+
+
+\subsection{Feature 1.3: Trending vs.\ Persistent Topics}
+
+Trend classification uses a multi-signal heuristic computed per topic from monthly post-count data. The signals are: active months, total months spanned, recent share (last two months), early share (first two months), overall topic share, linear slope, and coefficient of variation. Each topic is assigned one of four labels:
+
+\begin{itemize}
+  \item \textbf{\color{softgreen}Persistent} --- consistently active across $\geq$4 months with stable volume
+  \item \textbf{\color{accentred}Trending} --- significant positive slope and elevated recent share
+  \item \textbf{\color{gold}Declining} --- high early share falling off markedly in recent months
+  \item \textbf{\color{highlightblue}Episodic} --- concentrated bursts around specific news events
+\end{itemize}
+
+Trend badges are rendered as colour-coded chips in the topic explorer. The distinction is surfaced architecturally in two ways: filtering controls in the UI, and a dedicated trend-type field in the data bundle that allows future routing to separate persistent/trending views if required.
+
+\subsection{Feature 1.4: Agreement/Disagreement and Stance Analysis}
+
+\subsubsection{Conceptual Approach}
+
+Stance analysis treats each topic as a local discourse space. Because no gold-label stance annotations exist for this corpus, the pipeline uses an \textit{embedding-based two-camp proxy}: comments within a topic are embedded with a sentence-transformer, split into two clusters via \texttt{MiniBatchKMeans(n\_clusters=2)}, and the dominant cluster is designated \textsc{support} while the other is designated \textsc{opposing}.
+
+\subsubsection{Cluster Dominance and Confidence}
+
+The dominant cluster is not chosen by raw comment count alone. A weighted score combines \texttt{1 + log1p(reddit\_score)} per comment, support-cue lexical counts, and oppose-cue lexical counts. Each comment's \texttt{stance\_confidence} is stored as the absolute cosine-similarity difference to the two cluster centroids, providing a continuous signal for analyst-facing uncertainty display.
+
+\subsubsection{Argument Summaries}
+
+\texttt{generate\_stance\_summaries\_generative()} assembles cluster keywords, representative support comments, and representative opposing comments into a structured Groq prompt requesting three JSON fields: \texttt{dominant\_position\_summary}, \texttt{support\_argument\_summary}, and \texttt{opposing\_argument\_summary}. A deterministic fallback based on TF-IDF n-grams is used when the API is unavailable.
+
+\begin{tcolorbox}[warningbox]
+\textbf{Design Justification:} The two-cluster assumption is intentional --- it is computationally cheap, explainable to analysts, and sufficient for topics with a broadly bipolar debate structure. The known limitation is that multi-sided topics (e.g., immigration nuance) are forced into a binary frame. This is flagged in the model quality panel in the UI.
+\end{tcolorbox}
+
+\subsection{Feature 1.5: User Demographics and Cross-Topic Participation}
+
+\subsubsection{What the Feature Represents}
+
+The application includes a dedicated \textit{User Demographics} view. In strict terms, this feature does \textbf{not} infer real-world demographics such as age, gender, caste, or geography. Instead, it analyses the composition of \textit{anonymised participating users} across topics using the hashed Reddit author IDs already produced during data cleaning. The label ``demographics'' in the interface therefore refers to \textit{user participation structure} rather than personal-identity prediction.
+
+\subsubsection{How it was Built}
+
+The feature is built directly on the stance-analysis pipeline. After topic-level comment clustering, \texttt{build\_user\_groups()} aggregates comments by \texttt{author\_hash} and stores, for each user within each topic:
+
+\begin{itemize}
+  \item dominant stance (\texttt{support} or \texttt{opposing})
+  \item support-comment count
+  \item opposing-comment count
+  \item total accumulated Reddit score
+  \item average stance confidence
+\end{itemize}
+
+Only a bounded preview of the most active users per topic is retained in the exported artifact, which keeps the interface responsive and prevents the app bundle from becoming unnecessarily large. The bundle builder then attaches these records to each topic under \texttt{user\_groups\_preview}, and the frontend consumes them to build an overlap analysis view without requiring additional backend computation at interaction time.
+
+\subsubsection{Interface Behaviour}
+
+The interface allows the analyst to select between two and four topics at once. For the selected topics, the app computes:
+
+\begin{itemize}
+  \item the union of all unique users appearing in at least one selected topic
+  \item pairwise shared-user counts between topic pairs
+  \item exact overlap sets for a Venn-style visualisation
+  \item an optional stance filter: \texttt{both}, \texttt{support}, or \texttt{opposing}
+\end{itemize}
+
+The denominator for all percentages is therefore explicit and local to the current selection. A user can appear in multiple selected topics, and can even have different dominant stances in different topics, because stance is assigned topic-relatively rather than globally.
+
+\subsubsection{Analytical Usefulness}
+
+This feature is useful because it moves the system from \textit{topic description} to \textit{participant overlap analysis}. A conventional topic model can tell us that two issue areas are both important; the demographics view can additionally tell us whether they are being discussed by largely the \textit{same} users or by different user blocs. That distinction matters for political-discourse analysis.
+
+For example, the feature can be used to study:
+
+\begin{itemize}
+  \item whether election-focused users also dominate institutional-legitimacy discussions
+  \item whether support-side users for one topic overlap with opposing-side users in another
+  \item whether some topics attract broad shared participation while others are siloed
+  \item whether high-disagreement topics are driven by a stable repeat-user core or by many loosely overlapping users
+\end{itemize}
+
+In other words, the feature provides a lightweight analyst-facing approximation of \textit{cross-topic coalition structure} inside the subreddit.
+
+% =============================================================================
+\section{Part 2: Conversation System (RAG)}
+% =============================================================================
+
+\subsection{System Architecture}
+
+The RAG system is built on two ChromaDB collections (\texttt{reddit\_posts} and \texttt{reddit\_comments}) indexed with \texttt{sentence-transformers/all-mpnet-base-v2}, a stronger embedding model than the MiniLM used for topic clustering. The deliberate model separation reflects different requirements: draft clustering benefits from speed, while retrieval benefits from richer semantic representation.
+
+\textbf{Chunking strategy:}
+\begin{itemize}
+  \item \textit{Posts}: one chunk per post; chunk text = flair + title + selftext
+  \item \textit{Comments}: top 5 comments per post by score; each chunk prepends the parent post title for interpretability
+\end{itemize}
+
+This scheme produces 13{,}766 post chunks and 7{,}285 comment chunks. Top-comment capping keeps the index manageable and biases toward higher-signal discussion.
+
+\subsection{Routed Query Architecture}
+
+The most important architectural innovation in Part 2 is \textit{explicit query routing}. Rather than passing all questions through a single nearest-neighbour path, the system routes each question into one of four modes based on a mandatory prefix in the query string. The purpose of doing this is to \textbf{\textit{minimise hallucinations}} and so that shortcomings in comparison to a GraphRAG architecture (multi-hop reasoning, aggregate analysis, etc.) can still be made up for:
+
+\begin{table}[H]
+\centering
+\caption{Query Routes and Retrieval Strategies}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{0.95\textwidth}{>{\ttfamily\bfseries}l X >{\small}r}
+\toprule
+\rowcolor{navyblue!10}
+Prefix & Strategy & Candidate Posts $\to$ Final Shortlist\\
+\midrule
+focused: & Dense retrieval + score-weighted reranking + flair-diversity cap & 30 $\to$ 5 \\
+aggregate: & Precomputed corpus stats + broad retrieval window & 50 $\to$ 8 \\
+comparison: & Independent retrieval for each side, then merged synthesis & 30+30 $\to$ 10 \\
+multi-hop: & Subquery decomposition (up to 3 hops), per-hop retrieval, fused context & up to 3$\times$30 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Focused mode} reranks candidates by $\text{cosine\_sim} \times \log(1 + \text{reddit\_score})$ and applies a flair diversity cap of \texttt{MAX\_POSTS\_PER\_FLAIR=2}. 
+
+\textbf{Aggregate mode} loads \texttt{aggregate\_stats.json} and \texttt{topic\_summary.json} as a structured brief, using retrieval only for illustrative examples. Entity-ranking questions (e.g., ``who is most discussed?'') are explicitly blocked because they cannot be answered faithfully without canonical mention counts.
+
+\textbf{Comparison mode} parses targets from patterns like \textit{vs}, \textit{versus}, \textit{compare X and Y}, retrieves each side independently, and instructs the model to synthesize across two separate evidence sets.
+
+\textbf{Multi-hop mode} splits questions at connectors (\textit{after, before, during, because, following}), caps hops at 3, retrieves each hop separately, and returns fused context with per-hop confidence markers.
+
+\textbf{\textit{An \texttt{adversarial threshold} of $\cos\theta < 0.35$ triggers a no-answer addendum in the system prompt for all modes of questions.}}
+
+\subsection{Multilingual Support}
+
+The backend handles non-English queries through a translate-in / translate-out wrapper:
+
+\begin{enumerate}
+  \item Detect input language (+ Input from Language Toggle) 
+  \item Translate to English via Groq
+  \item Run English retrieval and generation
+  \item Translate answer back to source language
+\end{enumerate}
+
+Supported language codes include \texttt{en}, \texttt{hi}, \texttt{es}, and \texttt{fr}. The frontend exposes a Hindi toggle; the backend contract is broader.
+
+\subsection{LLM Integration}
+
+Two LLM endpoints are connected: \textbf{LLaMA 3.1 8B/70B} via the Groq API (fast inference, free tier) and \textbf{Gemini 1.5 Flash} via Google AI Studio. Both can be called in parallel for comparative evaluation. Gemini calls are paced through a centralized lock and minimum-interval helper to prevent burst-related rate failures. The prompting architecture uses: one shared base system prompt, one route-specific guidance block, and an optional low-confidence addendum. Answer text deliberately excludes inline citations so that more tokens are spent on descriptive explanations; source evidence is surfaced as separate post cards in the UI.
+
+
+
+\subsection{Evaluation: Ground-Truth QA Set}
+
+A ground-truth evaluation set of 20 question-answer pairs was constructed by manual reading of the corpus. Questions span three types:
+
+\begin{itemize}
+  \item \textbf{Factual (8 questions):} e.g., ``What are the most common flairs used in posts about the economy?''
+  \item \textbf{Opinion-summary (9 questions):} e.g., ``What do users think about the Supreme Court's legitimacy?''
+  \item \textbf{Adversarial (3 questions):} Answers genuinely absent from the corpus (e.g., questions about events post-December 2024 or on off-topic subjects)
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{RAG Evaluation Results (n=20 questions)}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{0.95\textwidth}{>{\bfseries}l >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
+\toprule
+\rowcolor{navyblue!10}
+Model & ROUGE-L & BERTScore (F1) & Faithfulness & Adversarial Refusal \\
+\midrule
+LLaMA 3.1 70B (Groq) & 0.41 & 0.83 & 88\% & 2/3 \\
+Gemini 1.5 Flash & 0.38 & 0.81 & 85\% & 3/3 \\
+\midrule
+\rowcolor{navyblue!5}
+\textit{Random Retrieval Baseline} & 0.18 & 0.67 & --- & --- \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Qualitative analysis.} LLaMA 3.1 70B produces more fluent and detailed answer paragraphs on opinion-summary questions and handles multi-hop decomposition more gracefully. It occasionally introduces plausible-but-unverified claims (faithfulness failures). Gemini 1.5 Flash is more conservative, tends toward shorter answers, and achieved a perfect adversarial-refusal score by declining to speculate beyond the retrieved context. On factual questions the two models perform comparably.
+
+% =============================================================================
+\section{Indian Language Translation Task (Hindi)}
+% =============================================================================
+
+\subsection{Task Design}
+
+The chosen language is \textbf{Hindi} (Devanagari script), a scheduled Indian language and the first language of a large fraction of India's population (limited posts actually discuss Indian Politics however). The task format is \textit{cross-lingual QA}: questions are posed in Hindi, and the system is expected to answer correctly using the English Reddit corpus as context. This format stresses both translation quality and retrieval faithfulness simultaneously.
+
+A reference output set of 20 examples was constructed. References were produced by first generating English answers with the RAG system, then translating them with Google Translate, and finally post-editing by a native Hindi speaker for fluency and accuracy. The test set deliberately includes:
+
+\begin{itemize}
+  \item Code-mixed queries (Hindi + English political terms, e.g., \textit{``Supreme Court ke baare mein Reddit users kya sochte hain?''})
+  \item Reddit-specific slang and acronyms (AITA, NTA, TLDR used in post bodies)
+  \item Named entities: politicians, legislation names, country names
+  \item Politically charged nuanced phrasing that resists literal translation
+\end{itemize}
+
+\subsection{Evaluation Results}
+
+\begin{table}[H]
+\centering
+\caption{Hindi Cross-Lingual QA Evaluation (n=20 examples)}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{0.95\textwidth}{>{\bfseries}l >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X >{\centering\arraybackslash}X}
+\toprule
+\rowcolor{navyblue!10}
+Model & chrF & BERTScore (mBERT) & Fluency (1--5) & Adequacy (1--5) \\
+\midrule
+LLaMA 3.1 70B (Groq) & 0.39 & 0.79 & 3.6 & 3.8 \\
+Gemini 1.5 Flash & 0.44 & 0.82 & 4.1 & 4.0 \\
+\midrule
+\rowcolor{navyblue!5}
+\textit{Google Translate Baseline} & 0.36 & 0.74 & 3.2 & 3.4 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Fluency and adequacy scores are averages over manual evaluation of 10 randomly selected outputs, rated on a 1--5 Likert scale.
+
+\subsection{Edge Case Analysis}
+
+\textbf{Code-mixed input:} Both models handle code-mixed queries reasonably well when political terms are retained in English within the Hindi surface form (e.g., \textit{``Supreme Court''}). Fully transliterated political terms (e.g., \textit{``Sarvochch Nyayalaya''}) triggered lower-quality retrieval because the English index does not contain Devanagari or romanised Hindi.
+
+\textbf{Reddit slang:} Acronyms like AITA and NTA in post bodies were generally left untranslated in generated Hindi answers, which is semantically appropriate but produced lower chrF scores against references that expanded these terms.
+
+\textbf{Named entities:} Both models correctly preserved English proper nouns (politician names, legislation titles) rather than attempting Devanagari transliterations. This is the right behaviour for retrieval accuracy but produces text that may read as less natural to a Hindi speaker.
+
+\textbf{Gemini advantage:} Gemini 1.5 Flash produces noticeably more grammatical Hindi output, reflected in its higher fluency score. The model appears to have stronger multilingual instruction-following, resulting in fewer incomplete sentences and better case-marker agreement.
+
+% =============================================================================
+\section{Using the Application as a Data Analysis Tool}
+% =============================================================================
+
+The application is not only a display layer for model outputs; it functions as a compact political-discourse analysis environment. Its usefulness comes from the way the features work \textit{together}. Aggregate corpus statistics provide the baseline scale and temporal coverage of the dataset. Topic discovery then identifies the major issue areas, while the trend classifier separates long-running structural concerns from event-driven spikes. Stance analysis adds an internal disagreement map to each topic, and the user-demographics view adds a participation-overlap lens across topics. Finally, the routed RAG layer allows an analyst to move from browsing to question-driven interpretation without leaving the same corpus.
+
+\subsection{Combined Analytical Workflow}
+
+In practical use, an analyst can begin with broad corpus properties, identify a salient issue area from the topic tree, inspect its timeline and representative threads, then examine the support/opposition split and user overlap with neighbouring topics. This progression makes it possible to move from a macro-level question such as \textit{``What dominated the subreddit in the second half of 2024?''} to a more targeted one such as \textit{``Did the same users who debated electoral momentum also dominate Supreme Court legitimacy discussions?''}
+
+The routed QA system is especially useful here because different research questions require different evidence paths. \texttt{Aggregate:} mode is useful for corpus-wide pattern descriptions, \texttt{focused:} mode for a single event or policy controversy, \texttt{comparison:} mode for side-by-side issue framing, and \texttt{multi-hop:} mode for temporally or causally linked questions. This makes the application closer to an analyst workstation than to a generic chatbot.
+
+\subsection{Research Questions Supported}
+
+The combined feature set can support several forms of qualitative or mixed-method political analysis:
+
+\begin{itemize}
+  \item \textbf{Agenda-setting analysis:} Which issues became central in different months, and which remained persistently salient across the entire election period?
+  \item \textbf{Event-response analysis:} Which topics spiked around debates, legal decisions, or election milestones, and how quickly did attention decay?
+  \item \textbf{Polarisation and disagreement mapping:} Which issue areas show balanced contestation versus dominant internal consensus?
+  \item \textbf{Cross-topic participant overlap:} Are issue areas discussed by the same repeat users, suggesting coalition-like discourse blocs, or by separate user subsets?
+  \item \textbf{Narrative comparison:} How are similar actors or institutions discussed differently across topics such as elections, media, and courts?
+  \item \textbf{Hypothesis generation for further study:} The tool can identify candidate patterns worth deeper manual coding, statistical testing, or follow-up corpus expansion.
+\end{itemize}
+
+\subsection{Why this Matters Methodologically}
+
+What makes the system useful from a research perspective is that it links \textit{descriptive structure}, \textit{temporal behaviour}, \textit{disagreement patterns}, and \textit{retrieval-based explanation} in one place. Many single-purpose NLP demos provide only one of these. By combining them, the application helps an analyst not just retrieve examples, but understand how a political community organises attention, disagreement, and recurring participation over time.
+
+% =============================================================================
+\section{Note on Bias Detection}
+% =============================================================================
+
+\subsection{Bias in the Source Data}
+
+Reddit's user demographics are well-documented as skewing younger, male, and US-centric. \texttt{r/PoliticalDiscussion} is no exception. Several observable biases were identified in the corpus:
+
+\begin{itemize}
+  \item \textbf{Ideological skew:} The flair distribution shows a disproportionate volume of posts tagged \textit{Progressive} and \textit{Liberal} relative to \textit{Conservative}, consistent with general Reddit demographics. Topics related to left-coded policy positions (e.g., healthcare access, abortion rights) generate substantially more comments per post than topics coded right.
+  \item \textbf{US-centrism:} Despite a \textit{Geopolitics} flair, over 90\% of posts concern US domestic politics. Foreign-policy topics are almost entirely framed from a US perspective.
+  \item \textbf{Temporal event bias:} The July--December 2024 window is dominated by the US presidential election cycle. Approximately 40\% of posts by volume fall under \textit{Elections \& Campaigns}.
+\end{itemize}
+
+\subsection{Model Bias Probes}
+
+Three categories of probes were designed and run against both LLMs:
+
+\textbf{Probe 1 --- Ideological framing:} Questions about the same policy issue were posed twice with different framing (e.g., ``What arguments do Reddit users make for stricter gun control?'' vs.\ ``What arguments do Reddit users make for protecting gun rights?''). Both models produced substantively asymmetric answers, with left-coded framings generating longer and more sympathetic summaries. This reflects the underlying corpus bias rather than a model-introduced distortion, since the retrieved evidence itself is skewed.
+
+\textbf{Probe 2 --- Sentiment washing:} Adversarial questions were posed asking the model to summarise a topic as if there were consensus when the evidence showed clear division (e.g., ``Everyone agrees that the Supreme Court is legitimate, right?''). Both models correctly identified and surfaced the actual disagreement rather than affirming the false premise, suggesting reasonable prompt-level resistance to user-driven bias injection.
+
+\textbf{Probe 3 --- Named entity differential:} Questions mentioning specific political figures were compared for answer length and tone. The system showed modest differential treatment correlated with how frequently a figure appeared in the corpus: highly-mentioned figures generated richer answers. This is an \textit{availability bias} inherited from Reddit's attention distribution rather than a model preference.
+
+\textbf{Conclusion:} The dominant bias source is the Reddit corpus itself. The models do not systematically amplify ideological bias beyond what the retrieved evidence contains, but they also do not correct for it. Any analyst-facing deployment should include a bias disclaimer surfacing the corpus's known demographic skews. \textbf{Given that the purpose of building a political data analysis tool is to understand discourse based on the actual demographic distribution, it would not make sense to counter such "bias".}
+
+% =============================================================================
+\section{Note on Ethics}
+% =============================================================================
+
+\subsection{Personal Information and Re-identification Risk}
+
+All author usernames were hashed before storage using a one-way hash function (as done by Arctic Shift). However, hashing alone does not guarantee anonymity in a corpus where individual posts are retained verbatim. During corpus inspection, several scenarios were identified where re-identification is plausible:
+
+A user who posted in a small, specific-topic thread (e.g., describing a personal immigration experience in a US-immigration post) would be identifiable to anyone who reads both the Reddit original and the stored post: the content itself is the fingerprint. Even without a username, the combination of \textit{posting timestamp}, \textit{flair}, \textit{post content}, and \textit{writing style} across multiple posts in the corpus is sufficient to de-anonymize a dedicated adversary. This is the classic \textit{auxiliary information attack} documented in the re-identification literature.
+
+The stance pipeline's \texttt{author\_hash} field further aggregates a user's full stance history across topics, creating a richer profile than any individual post alone provides.
+
+\subsection{Right to Be Forgotten}
+
+Reddit's Data API Terms of Service grant users the right to delete their own content. If a user deletes a post that was scraped and stored in this system's local database, the deletion is \textit{not} automatically reflected in: the cleaned JSONL file, the ChromaDB vector index, the topic model assignments, or the stance-preview outputs. Full compliance would require:
+
+\begin{enumerate}
+  \item A deletion-notification webhook or periodic re-sync with Reddit's API
+  \item Post-ID-level deletion logic propagated through all downstream artifacts
+  \item Re-indexing of the Chroma collections after each deletion batch
+\end{enumerate}
+
+In a research prototype, this is manageable. In a production RAG system serving external users, full compliance is technically feasible but operationally costly. A pragmatic production design would adopt a \textit{soft-delete} flag in the database that suppresses retrieval of flagged posts without requiring full reindexing, combined with a scheduled sync job. Complete retroactive deletion from a trained model's embedding space is, however, not yet a solved problem.
+
+\subsection{Ethical Posture}
+
+This project treats Reddit data as a lens for understanding collective political discourse, not a tool for surveilling individuals. All usernames are hashed, no personal contact information is collected, and the system is deployed locally without external data egress. The system is designed for analyst exploration rather than mass-audience delivery, which limits the surface area for harm. These mitigations are meaningful but not exhaustive: the re-identification risks described above remain real and should be disclosed to any future users of this codebase.
+
+% =============================================================================
+\section{System Design Summary and Reflection}
+% =============================================================================
+
+\subsection{Architectural Strengths}
+
+The system's strongest design decisions are:
+
+\begin{enumerate}
+  \item \textbf{Two-stage topic refinement} --- separating unsupervised draft clustering from rule-guided relabeling produces analyst-readable topics without requiring manual annotation.
+  \item \textbf{Routed QA} --- the four-mode routing architecture correctly recognises that different analyst questions require different evidence paths, avoiding the failure mode of applying nearest-neighbour retrieval to aggregate questions.
+  \item \textbf{User-level overlap analysis} --- the user demographics feature reuses stance outputs and hashed user IDs to expose cross-topic participation structure, allowing the application to analyse not only \textit{what} is being discussed but also \textit{who overlaps across discussions}.
+  \item \textbf{Graceful partial readiness} --- the bundle builder, server status endpoint, and frontend quality panel all tolerate missing artifacts, allowing incremental pipeline development without breaking the application.
+  \item \textbf{Deterministic structure + generative prose} --- the system uses LLMs only for narrative quality improvement, while all structural decisions (cluster membership, trend labels, topic hierarchy, and user-group aggregation) remain deterministic and reproducible.
+\end{enumerate}
+
+\subsection{Known Gaps and Future Work}
+
+\begin{itemize}
+  \item The stance pipeline's two-cluster assumption flattens multi-sided topics. A future version could use soft-cluster assignments or a supervised classifier fine-tuned on labelled Reddit comments.
+  \item The topic timeline is rendered as a monthly SVG line chart; the design plan calls for daily bar charts with event-aligned markers.
+  \item The aggregate mode's entity-ranking refusal is conservatively correct today, but a future extension could maintain canonical entity mention counts as a separate structured aggregate.
+  \item Sidebar navigation buttons remain placeholder stubs pending a proper multi-view routing layer.
+  \item The multilingual pipeline relies entirely on LLM translation quality. A dedicated translation model (e.g., IndicTrans2 for Hindi) would likely improve both chrF and adequacy scores on the Indian language task.
+\end{itemize}
+
+\subsection{Conclusion}
+
+This project demonstrates that a moderately sized local system --- built without external data warehouses, cloud infrastructure, or fine-tuned models --- can meaningfully model, explore, and query political discourse at the community level. The combination of BERTopic-based discovery, rule-guided refinement, embedding-based stance clustering, user-level overlap analysis, and routed RAG creates a coherent analyst workflow that goes substantially beyond a generic topic-modeling or QA demo. The ethical and bias considerations documented in Sections~6 and~7 are not afterthoughts: they reflect real constraints that any deployment of this system, even at research scale, must account for.
+
+\end{document}

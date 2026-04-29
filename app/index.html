@@ -1,150 +1,150 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Political Discussion Analysis Explorer</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="brand-block">
-          <div class="eyebrow">Political Analysis Tool</div>
-          <h1>Poliscope</h1>
-          <p id="subredditLabel"></p>
-        </div>
 
-        <div class="conversation-bar">
-          <label class="prompt-box">
-            <span>Conversation system</span>
-            <input
-              id="conversationInput"
-              type="search"
-              placeholder='Type a prefixed question such as aggregate: "Who are the top politicians being discussed?"'
-              autocomplete="off"
-              aria-describedby="queryTypeHint"
-            />
-            <div id="queryTypeMenu" class="query-type-menu" hidden></div>
-            <div id="queryTypeHint" class="prompt-hint">
-              Prefix each question with `focused:`, `aggregate:`, `comparison:`, or `multi-hop:`. Click the bar to see examples.
-            </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Political Discussion Analysis Explorer</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="eyebrow">Political Data Analysis Tool</div>
+        <h1>r/PoliticalDiscussion</h1>
+        <p id="subredditLabel"></p>
+      </div>
+
+      <div class="conversation-bar">
+        <label class="prompt-box">
+          <span>Conversation system</span>
+          <input id="conversationInput" type="search"
+            placeholder='Type a prefixed question such as aggregate: "Who are the top politicians being discussed?"'
+            autocomplete="off" aria-describedby="queryTypeHint" />
+          <div id="queryTypeMenu" class="query-type-menu" hidden></div>
+          <div id="queryTypeHint" class="prompt-hint">
+            Prefix each question with `focused:`, `aggregate:`, `comparison:`, or `multi-hop:`. Click the bar to see
+            examples.
+          </div>
+        </label>
+
+        <div class="toolbar">
+          <label class="toolbar-control">
+            <span>QA model</span>
+            <select id="modelSelect">
+              <option value="both">Groq + Gemini</option>
+              <option value="groq">Groq only</option>
+              <option value="gemini">Gemini only</option>
+            </select>
           </label>
+          <label class="toolbar-control">
+            <span>Date range</span>
+            <select id="dateFilter"></select>
+          </label>
+          <label class="toolbar-control">
+            <span>Flair</span>
+            <select id="flairFilter"></select>
+          </label>
+          <label class="toolbar-control">
+            <span>Trend</span>
+            <select id="trendFilter">
+              <option value="all">All</option>
+              <option value="Persistent">Persistent</option>
+              <option value="Trending">Trending</option>
+              <option value="Declining">Declining</option>
+              <option value="Episodic">Episodic</option>
+            </select>
+          </label>
+          <label class="toolbar-control">
+            <span>Topic search</span>
+            <input id="searchInput" type="search" placeholder="keywords or labels" />
+          </label>
+          <button id="languageToggle" class="language-toggle" type="button" aria-pressed="false">
+            Hindi Mode: Off
+          </button>
+          <button id="askButton" class="ask-button" type="button">Run QA</button>
+        </div>
+      </div>
+    </header>
 
-          <div class="toolbar">
-            <label class="toolbar-control">
-              <span>QA model</span>
-              <select id="modelSelect">
-                <option value="both">Groq + Gemini</option>
-                <option value="groq">Groq only</option>
-                <option value="gemini">Gemini only</option>
-              </select>
-            </label>
-            <label class="toolbar-control">
-              <span>Date range</span>
-              <select id="dateFilter"></select>
-            </label>
-            <label class="toolbar-control">
-              <span>Flair</span>
-              <select id="flairFilter"></select>
-            </label>
-            <label class="toolbar-control">
-              <span>Trend</span>
-              <select id="trendFilter">
-                <option value="all">All</option>
-                <option value="Persistent">Persistent</option>
-                <option value="Trending">Trending</option>
-                <option value="Declining">Declining</option>
-                <option value="Episodic">Episodic</option>
-              </select>
-            </label>
-            <label class="toolbar-control">
-              <span>Topic search</span>
-              <input id="searchInput" type="search" placeholder="keywords or labels" />
-            </label>
-            <button id="languageToggle" class="language-toggle" type="button" aria-pressed="false">
-              Hindi Mode: Off
-            </button>
-            <button id="askButton" class="ask-button" type="button">Run QA</button>
+    <aside class="sidebar">
+      <section class="sidebar-panel">
+        <div class="eyebrow">Navigation</div>
+        <nav class="nav-list">
+          <button class="nav-item active" type="button">Topic Map</button>
+          <button class="nav-item" type="button">Trend Monitor</button>
+          <button class="nav-item" type="button">Conversation QA</button>
+          <button class="nav-item" type="button">Historic Events</button>
+          <button class="nav-item" type="button">Reports</button>
+        </nav>
+      </section>
+
+      <section class="sidebar-panel">
+        <div class="eyebrow">Dataset</div>
+        <div id="aggregateGrid" class="sidebar-stats"></div>
+      </section>
+
+      <section class="sidebar-panel">
+        <div class="eyebrow">Model Quality</div>
+        <div id="qualityPanel" class="quality-panel"></div>
+      </section>
+
+      <section class="sidebar-panel">
+        <div class="eyebrow">Pipeline Control</div>
+        <div class="pipeline-actions">
+          <button id="refreshStatusButton" class="pipeline-button" type="button">Refresh status</button>
+          <button id="rebuildBundleButton" class="pipeline-button" type="button">Rebuild bundle</button>
+          <button id="runTopicAnalysisButton" class="pipeline-button" type="button">Run topic analysis</button>
+          <button id="runStanceAnalysisButton" class="pipeline-button" type="button">Run stance preview</button>
+        </div>
+        <div id="pipelineStatus" class="pipeline-status"></div>
+      </section>
+    </aside>
+
+    <main class="main-content">
+      <section class="metrics-row" id="overviewStats"></section>
+
+      <section class="workspace qa-workspace">
+        <div class="workspace-header">
+          <div>
+            <div class="eyebrow">Conversation QA</div>
+            <h2>Query Results</h2>
+            <p id="qaStatusText" class="workspace-copy">Submit a prefixed question to query the corpus.</p>
           </div>
         </div>
-      </header>
+        <div id="qaResultPanel" class="qa-result-panel">
+          <div class="empty-state">No QA result yet.</div>
+        </div>
+      </section>
 
-      <aside class="sidebar">
-        <section class="sidebar-panel">
-          <div class="eyebrow">Navigation</div>
-          <nav class="nav-list">
-            <button class="nav-item active" type="button">Topic Map</button>
-            <button class="nav-item" type="button">Trend Monitor</button>
-            <button class="nav-item" type="button">Conversation QA</button>
-            <button class="nav-item" type="button">Historic Events</button>
-            <button class="nav-item" type="button">Reports</button>
-          </nav>
-        </section>
-
-        <section class="sidebar-panel">
-          <div class="eyebrow">Dataset</div>
-          <div id="aggregateGrid" class="sidebar-stats"></div>
-        </section>
-
-        <section class="sidebar-panel">
-          <div class="eyebrow">Model Quality</div>
-          <div id="qualityPanel" class="quality-panel"></div>
-        </section>
-
-        <section class="sidebar-panel">
-          <div class="eyebrow">Pipeline Control</div>
-          <div class="pipeline-actions">
-            <button id="refreshStatusButton" class="pipeline-button" type="button">Refresh status</button>
-            <button id="rebuildBundleButton" class="pipeline-button" type="button">Rebuild bundle</button>
-            <button id="runTopicAnalysisButton" class="pipeline-button" type="button">Run topic analysis</button>
-            <button id="runStanceAnalysisButton" class="pipeline-button" type="button">Run stance preview</button>
+      <section class="workspace">
+        <div class="workspace-header">
+          <div>
+            <div class="eyebrow">Hierarchical Explorer</div>
+            <h2>Topic Map</h2>
+            <p id="topicCountLabel" class="workspace-copy"></p>
           </div>
-          <div id="pipelineStatus" class="pipeline-status"></div>
-        </section>
-      </aside>
-
-      <main class="main-content">
-        <section class="metrics-row" id="overviewStats"></section>
-
-        <section class="workspace qa-workspace">
-          <div class="workspace-header">
-            <div>
-              <div class="eyebrow">Conversation QA</div>
-              <h2>Query Results</h2>
-              <p id="qaStatusText" class="workspace-copy">Submit a prefixed question to query the corpus.</p>
-            </div>
+          <div class="zoom-controls">
+            <button id="zoomOut" type="button">Zoom -</button>
+            <div id="zoomLabel" class="zoom-label">100%</div>
+            <button id="zoomIn" type="button">Zoom +</button>
           </div>
-          <div id="qaResultPanel" class="qa-result-panel">
-            <div class="empty-state">No QA result yet.</div>
-          </div>
-        </section>
+        </div>
 
-        <section class="workspace">
-          <div class="workspace-header">
-            <div>
-              <div class="eyebrow">Hierarchical Explorer</div>
-              <h2>Topic Map</h2>
-              <p id="topicCountLabel" class="workspace-copy"></p>
-            </div>
-            <div class="zoom-controls">
-              <button id="zoomOut" type="button">Zoom -</button>
-              <div id="zoomLabel" class="zoom-label">100%</div>
-              <button id="zoomIn" type="button">Zoom +</button>
-            </div>
-          </div>
+        <div class="workspace-grid">
+          <section class="tree-panel">
+            <div id="topicTree" class="topic-tree"></div>
+          </section>
 
-          <div class="workspace-grid">
-            <section class="tree-panel">
-              <div id="topicTree" class="topic-tree"></div>
-            </section>
+          <section class="detail-panel" id="topicDetail"></section>
+        </div>
+      </section>
+    </main>
+  </div>
 
-            <section class="detail-panel" id="topicDetail"></section>
-          </div>
-        </section>
-      </main>
-    </div>
+  <script src="./app.js" type="module"></script>
+</body>
 
-    <script src="./app.js" type="module"></script>
-  </body>
 </html>

@@ -18,8 +18,14 @@ from urllib.parse import parse_qs, urlparse
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
 DATA_DIR = ROOT / "data"
+VENV_SITE_PACKAGES = ROOT / ".venv" / "Lib" / "site-packages"
+STANCE_DIR = DATA_DIR / "topic_stance"
+LEGACY_STANCE_DIR = DATA_DIR / "topic_stance_preview"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
+
+if VENV_SITE_PACKAGES.exists():
+    sys.path.insert(0, str(VENV_SITE_PACKAGES))
 
 
 class AppRuntime:
@@ -85,13 +91,15 @@ class AppRuntime:
     def run_stance_analysis(self) -> dict[str, Any]:
         return self.run_script(
             "scripts/topic_stance_analysis.py",
-            ["--out-dir", "data/topic_stance_preview"],
+            ["--out-dir", "data/topic_stance"],
         )
 
     def status(self) -> dict[str, Any]:
         bundle_exists = self.bundle_path().exists()
         topic_meta_path = DATA_DIR / "topic_analysis" / "run_metadata.json"
-        stance_meta_path = DATA_DIR / "topic_stance_preview" / "run_metadata.json"
+        stance_meta_path = STANCE_DIR / "run_metadata.json"
+        if not stance_meta_path.exists():
+            stance_meta_path = LEGACY_STANCE_DIR / "run_metadata.json"
         index_meta_path = DATA_DIR / "chroma_db" / "index_metadata.json"
 
         def load_json(path: Path) -> Any:

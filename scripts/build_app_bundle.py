@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 APP_DIR = ROOT / "app"
+STANCE_DIR_CANDIDATES = [
+    DATA_DIR / "topic_stance",
+    DATA_DIR / "topic_stance_preview",
+]
 KNOWN_POLITICAL_EVENTS = [
     {"date": "2024-06-27", "month": "2024-06", "label": "First presidential debate"},
     {"date": "2024-06-28", "month": "2024-06", "label": "Chevron deference overturned"},
@@ -30,6 +35,13 @@ def load_json_if_exists(path: Path, default: Any) -> Any:
     if path.exists():
         return load_json(path)
     return default
+
+
+def resolve_stance_dir() -> Path:
+    for candidate in STANCE_DIR_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    return STANCE_DIR_CANDIDATES[0]
 
 
 def load_comment_preview(path: Path, per_topic: int = 12) -> dict[int, list[dict[str, Any]]]:
@@ -61,6 +73,60 @@ def load_comment_preview(path: Path, per_topic: int = 12) -> dict[int, list[dict
                 }
             )
     return preview
+
+
+def load_daily_topic_timelines() -> tuple[list[str], dict[int, list[int]]]:
+    post_topics_path = DATA_DIR / "topic_analysis" / "post_topics.csv"
+    posts_path = DATA_DIR / "cleaned" / "posts_clean.jsonl"
+    if not post_topics_path.exists() or not posts_path.exists():
+        return [], {}
+
+    post_to_topic: dict[str, int] = {}
+    with post_topics_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            post_id = row.get("post_id")
+            topic_id = row.get("topic_id")
+            if not post_id or topic_id is None:
+                continue
+            post_to_topic[post_id] = int(topic_id)
+
+    counts_by_topic: dict[int, dict[str, int]] = {}
+    min_day: date | None = None
+    max_day: date | None = None
+    with posts_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            post_id = row.get("post_id")
+            topic_id = post_to_topic.get(post_id)
+            created_iso = row.get("created_iso")
+            if topic_id is None or not created_iso:
+                continue
+            day = str(created_iso)[:10]
+            parsed_day = date.fromisoformat(day)
+            if min_day is None or parsed_day < min_day:
+                min_day = parsed_day
+            if max_day is None or parsed_day > max_day:
+                max_day = parsed_day
+            counts_by_topic.setdefault(topic_id, {})
+            counts_by_topic[topic_id][day] = counts_by_topic[topic_id].get(day, 0) + 1
+
+    if min_day is None or max_day is None:
+        return [], {}
+
+    day_axis: list[str] = []
+    cursor = min_day
+    while cursor <= max_day:
+        day_axis.append(cursor.isoformat())
+        cursor += timedelta(days=1)
+
+    aligned_counts = {
+        topic_id: [day_counts.get(day, 0) for day in day_axis]
+        for topic_id, day_counts in counts_by_topic.items()
+    }
+    return day_axis, aligned_counts
 
 
 def build_topic_tree(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -99,23 +165,28 @@ def build_bundle() -> dict[str, Any]:
     aggregate = load_json(DATA_DIR / "topic_analysis" / "aggregate_stats.json")
     topic_run = load_json(DATA_DIR / "topic_analysis" / "run_metadata.json")
     topics = load_json(DATA_DIR / "topic_analysis" / "topic_summary.json")
-    stance_preview = load_json_if_exists(DATA_DIR / "topic_stance_preview" / "topic_stance_summary.json", [])
+    stance_dir = resolve_stance_dir()
+    stance_preview = load_json_if_exists(stance_dir / "topic_stance_summary.json", [])
     stance_meta = load_json_if_exists(
-        DATA_DIR / "topic_stance_preview" / "run_metadata.json",
+        stance_dir / "run_metadata.json",
         {
-            "output_dir": str(DATA_DIR / "topic_stance_preview"),
+            "output_dir": str(stance_dir),
             "comment_count_analyzed": 0,
             "topic_count_analyzed": 0,
             "status": "missing",
         },
     )
-    user_groups = load_json_if_exists(DATA_DIR / "topic_stance_preview" / "topic_user_stance_groups.json", [])
-    comment_preview = load_comment_preview(DATA_DIR / "topic_stance_preview" / "comment_stances.csv")
+    user_groups = load_json_if_exists(stance_dir / "topic_user_stance_groups.json", [])
+    comment_preview = load_comment_preview(stance_dir / "comment_stances.csv")
 
     stance_by_topic = {int(item["topic_id"]): item for item in stance_preview}
     user_groups_by_topic = {int(item["topic_id"]): item for item in user_groups}
     month_axis = topic_run["month_axis"]
-    events_in_range = [event for event in KNOWN_POLITICAL_EVENTS if event["month"] in month_axis]
+    day_axis, daily_counts_by_topic = load_daily_topic_timelines()
+    day_axis_lookup = set(day_axis)
+    events_in_range = [
+        event for event in KNOWN_POLITICAL_EVENTS if event["month"] in month_axis or event["date"] in day_axis_lookup
+    ]
 
     enriched_topics: list[dict[str, Any]] = []
     trend_counts = {"Persistent": 0, "Trending": 0, "Declining": 0, "Episodic": 0}
@@ -133,6 +204,8 @@ def build_bundle() -> dict[str, Any]:
                     "months": month_axis,
                     "post_counts": topic.get("monthly_post_count_series", []),
                     "post_shares": topic.get("monthly_share_series", []),
+                    "day_axis": day_axis,
+                    "daily_post_counts": daily_counts_by_topic.get(topic_id, []),
                     "events": events_in_range,
                 },
             }

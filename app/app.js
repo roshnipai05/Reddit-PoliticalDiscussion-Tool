@@ -5,11 +5,15 @@ const state = {
   expandedMajorTopics: new Set(),
   zoom: 1,
   language: "en",
+  model: "both",
+  activeView: "topic-map",
   queryTypeMenuOpen: false,
   qaResult: null,
   qaBusy: false,
   pipelineBusy: false,
   pipelineLog: "No pipeline action has been run yet.",
+  selectedDemographicTopics: [],
+  demographicStanceFilter: "both",
 };
 
 const QUESTION_TYPES = [
@@ -55,8 +59,6 @@ const els = {
   zoomIn: document.getElementById("zoomIn"),
   zoomOut: document.getElementById("zoomOut"),
   zoomLabel: document.getElementById("zoomLabel"),
-  languageToggle: document.getElementById("languageToggle"),
-  modelSelect: document.getElementById("modelSelect"),
   askButton: document.getElementById("askButton"),
   conversationInput: document.getElementById("conversationInput"),
   queryTypeMenu: document.getElementById("queryTypeMenu"),
@@ -68,6 +70,17 @@ const els = {
   runTopicAnalysisButton: document.getElementById("runTopicAnalysisButton"),
   runStanceAnalysisButton: document.getElementById("runStanceAnalysisButton"),
   pipelineStatus: document.getElementById("pipelineStatus"),
+  demographicsTopicPicker: document.getElementById("demographicsTopicPicker"),
+  demographicsSummary: document.getElementById("demographicsSummary"),
+  overlapChart: document.getElementById("overlapChart"),
+  overlapLegend: document.getElementById("overlapLegend"),
+  overlapTable: document.getElementById("overlapTable"),
+  demographicsNote: document.getElementById("demographicsNote"),
+  navItems: [...document.querySelectorAll(".nav-item[data-view]")],
+  pageSections: [...document.querySelectorAll(".page-section[data-page]")],
+  languageToggles: [...document.querySelectorAll(".flag-toggle[data-language]")],
+  modelToggles: [...document.querySelectorAll(".model-toggle[data-model]")],
+  stanceToggles: [...document.querySelectorAll(".stance-toggle[data-stance-filter]")],
 };
 
 async function apiFetch(path, options = {}) {
@@ -101,6 +114,13 @@ function escapeHtml(value) {
 
 function trendClass(value) {
   return String(value || "").toLowerCase();
+}
+
+function formatMonthLabel(value) {
+  const [year, month] = String(value || "").split("-");
+  if (!year || !month) return String(value || "");
+  const date = new Date(`${year}-${month}-01T00:00:00Z`);
+  return new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
 }
 
 function normalizeQuestionPrefix(value) {
@@ -160,9 +180,401 @@ function validateConversationInput() {
   return !isInvalid;
 }
 
+function maybeOpenQueryTypeMenu() {
+  if (!els.conversationInput.value.trim()) {
+    openQueryTypeMenu();
+  }
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  els.navItems.forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === view);
+  });
+  els.pageSections.forEach((section) => {
+    section.hidden = section.dataset.page !== view;
+  });
+  if (view !== "conversation-qa") {
+    closeQueryTypeMenu();
+  }
+}
+
+function syncLanguageToggles() {
+  els.languageToggles.forEach((button) => {
+    const active = button.dataset.language === state.language;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function syncModelToggles() {
+  els.modelToggles.forEach((button) => {
+    const active = button.dataset.model === state.model;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function getTopicById(topicId) {
   if (!state.bundle) return null;
   return state.bundle.topics.find((topic) => Number(topic.topic_id) === Number(topicId)) || null;
+}
+
+function getDemographicTopics() {
+  if (!state.bundle) return [];
+  return state.bundle.topics
+    .filter((topic) => topic.user_groups_preview?.users?.length)
+    .sort((left, right) => {
+      const leftUsers = left.user_groups_preview?.users?.length || 0;
+      const rightUsers = right.user_groups_preview?.users?.length || 0;
+      return rightUsers - leftUsers;
+    });
+}
+
+function getFilteredDemographicUsers(topic, stanceFilter = state.demographicStanceFilter) {
+  const users = topic?.user_groups_preview?.users || [];
+  if (stanceFilter === "both") {
+    return users;
+  }
+  return users.filter((user) => user.dominant_stance === stanceFilter);
+}
+
+function getTopicSupportOpposingCounts(topic) {
+  const preview = topic?.user_groups_preview;
+  return {
+    support: Number(preview?.support_users || 0),
+    opposing: Number(preview?.opposing_users || 0),
+  };
+}
+
+function getSelectedDemographicTopics() {
+  return state.selectedDemographicTopics
+    .map((topicId) => getTopicById(topicId))
+    .filter((topic) => topic?.user_groups_preview?.users?.length);
+}
+
+function syncDemographicStanceToggles() {
+  els.stanceToggles.forEach((button) => {
+    const active = button.dataset.stanceFilter === state.demographicStanceFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function ensureValidDemographicSelection() {
+  const availableTopicIds = new Set(getDemographicTopics().map((topic) => Number(topic.topic_id)));
+  state.selectedDemographicTopics = state.selectedDemographicTopics
+    .filter((topicId) => availableTopicIds.has(Number(topicId)))
+    .slice(0, 4);
+
+  if (state.selectedDemographicTopics.length >= 2) {
+    return;
+  }
+
+  const defaults = getDemographicTopics()
+    .slice(0, 2)
+    .map((topic) => Number(topic.topic_id));
+  state.selectedDemographicTopics = defaults;
+}
+
+function toggleDemographicTopic(topicId) {
+  const normalizedId = Number(topicId);
+  const next = [...state.selectedDemographicTopics];
+  const currentIndex = next.indexOf(normalizedId);
+  if (currentIndex >= 0) {
+    next.splice(currentIndex, 1);
+  } else if (next.length < 4) {
+    next.push(normalizedId);
+  }
+  state.selectedDemographicTopics = next;
+  renderUserDemographics();
+}
+
+function formatPercentFromCount(count, total) {
+  if (!total) return "0.0%";
+  return `${((count / total) * 100).toFixed(1)}%`;
+}
+
+function computeDemographicOverlap(topics, stanceFilter = state.demographicStanceFilter) {
+  const topicSets = topics.map((topic) => {
+    const filteredUsers = getFilteredDemographicUsers(topic, stanceFilter);
+    return {
+      topic,
+      users: filteredUsers,
+      userSet: new Set(filteredUsers.map((user) => user.author_hash)),
+    };
+  });
+
+  const participants = new Set();
+  topicSets.forEach((entry) => {
+    entry.userSet.forEach((authorHash) => participants.add(authorHash));
+  });
+
+  const masks = new Map();
+  participants.forEach((authorHash) => {
+    const membership = topicSets
+      .map((entry, index) => (entry.userSet.has(authorHash) ? String(index) : null))
+      .filter(Boolean);
+    const key = membership.join("|");
+    if (!key) return;
+    masks.set(key, (masks.get(key) || 0) + 1);
+  });
+
+  const pairwise = [];
+  for (let leftIndex = 0; leftIndex < topicSets.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < topicSets.length; rightIndex += 1) {
+      const sharedUsers = [...topicSets[leftIndex].userSet].filter((authorHash) =>
+        topicSets[rightIndex].userSet.has(authorHash)
+      ).length;
+      pairwise.push({
+        leftTopic: topicSets[leftIndex].topic,
+        rightTopic: topicSets[rightIndex].topic,
+        sharedUsers,
+      });
+    }
+  }
+
+  return {
+    topicSets,
+    participantCount: participants.size,
+    exactMasks: [...masks.entries()]
+      .map(([key, count]) => ({
+        key,
+        count,
+        indexes: key.split("|").map((value) => Number(value)),
+      }))
+      .sort((left, right) => right.count - left.count),
+    pairwise,
+  };
+}
+
+function getOverlapLayout(topicCount) {
+  if (topicCount === 2) {
+    return [
+      { x: 260, y: 208, rx: 120, ry: 98, rotation: -8 },
+      { x: 500, y: 208, rx: 120, ry: 98, rotation: 8 },
+    ];
+  }
+  if (topicCount === 3) {
+    return [
+      { x: 270, y: 222, rx: 116, ry: 95, rotation: -14 },
+      { x: 490, y: 222, rx: 116, ry: 95, rotation: 14 },
+      { x: 380, y: 118, rx: 120, ry: 98, rotation: 0 },
+    ];
+  }
+  return [
+    { x: 270, y: 130, rx: 108, ry: 88, rotation: -18 },
+    { x: 494, y: 130, rx: 108, ry: 88, rotation: 18 },
+    { x: 270, y: 286, rx: 108, ry: 88, rotation: 14 },
+    { x: 494, y: 286, rx: 108, ry: 88, rotation: -14 },
+  ];
+}
+
+function renderOverlapChart(analysis) {
+  const { topicSets, exactMasks, participantCount } = analysis;
+  const layout = getOverlapLayout(topicSets.length);
+  const colors = ["#305987", "#b33a31", "#396c55", "#9f7f3a"];
+  const maxTopicUsers = Math.max(...topicSets.map((entry) => entry.userSet.size), 1);
+
+  const circles = topicSets
+    .map((entry, index) => {
+      const base = layout[index];
+      const ratio = Math.sqrt(entry.userSet.size / maxTopicUsers || 0);
+      const rx = Math.max(72, base.rx * (0.72 + ratio * 0.28));
+      const ry = Math.max(58, base.ry * (0.72 + ratio * 0.28));
+      return { ...base, rx, ry, color: colors[index], topic: entry.topic, count: entry.userSet.size };
+    });
+
+  const circleMarkup = circles
+    .map(
+      (circle, index) => `
+        <g>
+          <ellipse
+            cx="${circle.x}"
+            cy="${circle.y}"
+            rx="${circle.rx}"
+            ry="${circle.ry}"
+            transform="rotate(${circle.rotation} ${circle.x} ${circle.y})"
+            fill="${circle.color}22"
+            stroke="${circle.color}"
+            stroke-width="2.5"
+          ></ellipse>
+          <text x="${circle.x}" y="${circle.y - circle.ry - 16}" text-anchor="middle" class="venn-topic-label">
+            ${escapeHtml(circle.topic.label)}
+          </text>
+          <text x="${circle.x}" y="${circle.y - circle.ry - 1}" text-anchor="middle" class="venn-topic-count">
+            ${formatNumber(circle.count)} users
+          </text>
+        </g>
+      `
+    )
+    .join("");
+
+  const labelMarkup = exactMasks
+    .filter((mask) => mask.count > 0)
+    .map((mask, index) => {
+      const centers = mask.indexes.map((topicIndex) => layout[topicIndex]);
+      const averageX = centers.reduce((sum, item) => sum + item.x, 0) / centers.length;
+      const averageY = centers.reduce((sum, item) => sum + item.y, 0) / centers.length;
+      const yOffset = mask.indexes.length === 1 ? 24 : mask.indexes.length === topicSets.length ? -8 : 0;
+      const xOffset = ((index % 3) - 1) * 12;
+      return `
+        <g>
+          <rect x="${averageX - 44 + xOffset}" y="${averageY - 20 + yOffset}" width="88" height="38" rx="12" class="venn-label-bg"></rect>
+          <text x="${averageX + xOffset}" y="${averageY - 4 + yOffset}" text-anchor="middle" class="venn-label-value">
+            ${formatNumber(mask.count)}
+          </text>
+          <text x="${averageX + xOffset}" y="${averageY + 11 + yOffset}" text-anchor="middle" class="venn-label-share">
+            ${formatPercentFromCount(mask.count, participantCount)}
+          </text>
+        </g>
+      `;
+    })
+    .join("");
+
+  return `
+    <svg viewBox="0 0 760 420" class="overlap-chart" role="img" aria-label="Cross-topic user overlap chart">
+      <rect x="0" y="0" width="760" height="420" rx="24" class="chart-bg"></rect>
+      ${circleMarkup}
+      ${labelMarkup}
+    </svg>
+  `;
+}
+
+function renderUserDemographics() {
+  if (!els.demographicsTopicPicker) {
+    return;
+  }
+
+  const demographicTopics = getDemographicTopics();
+  if (!state.bundle || !demographicTopics.length) {
+    els.demographicsTopicPicker.innerHTML = "";
+    els.demographicsSummary.innerHTML = "";
+    els.overlapChart.innerHTML =
+      '<div class="empty-state compact-empty">Stance data is unavailable. Run stance preview to populate this view.</div>';
+    els.overlapLegend.innerHTML = "";
+    els.overlapTable.innerHTML = "";
+    els.demographicsNote.textContent =
+      "This view depends on topic-level stance user groups. When those outputs are missing, the page remains read-only.";
+    return;
+  }
+
+  ensureValidDemographicSelection();
+  syncDemographicStanceToggles();
+
+  const selectedIds = new Set(state.selectedDemographicTopics.map((topicId) => Number(topicId)));
+  els.demographicsTopicPicker.innerHTML = demographicTopics
+    .map((topic) => {
+      const selected = selectedIds.has(Number(topic.topic_id));
+      const disabled = !selected && state.selectedDemographicTopics.length >= 4;
+      return `
+        <button
+          class="topic-picker-pill ${selected ? "selected" : ""}"
+          type="button"
+          data-topic-toggle="${topic.topic_id}"
+          ${disabled ? "disabled" : ""}
+        >
+          <span class="topic-picker-label">${escapeHtml(topic.label)}</span>
+          <span class="topic-picker-meta">${formatNumber(topic.user_groups_preview.users.length)} users</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  [...els.demographicsTopicPicker.querySelectorAll("[data-topic-toggle]")].forEach((button) => {
+    button.addEventListener("click", () => toggleDemographicTopic(button.dataset.topicToggle));
+  });
+
+  const selectedTopics = getSelectedDemographicTopics();
+  if (selectedTopics.length < 2) {
+    els.demographicsSummary.innerHTML = `
+      <article class="metric-card compact-card">
+        <div class="metric-label">Selection</div>
+        <div class="metric-value">${formatNumber(selectedTopics.length)}</div>
+      </article>
+    `;
+    els.overlapChart.innerHTML =
+      '<div class="empty-state compact-empty">Select at least two topics to compute overlap.</div>';
+    els.overlapLegend.innerHTML = "";
+    els.overlapTable.innerHTML = "";
+    els.demographicsNote.textContent =
+      "Percentages will use the union of users who appear in at least one currently selected topic under the active stance filter.";
+    return;
+  }
+
+  const analysis = computeDemographicOverlap(selectedTopics);
+  els.demographicsSummary.innerHTML = [
+    ["Selected topics", selectedTopics.length],
+    ["Participating users", analysis.participantCount],
+    [
+      "Largest pair overlap",
+      analysis.pairwise.length ? Math.max(...analysis.pairwise.map((pair) => pair.sharedUsers)) : 0,
+    ],
+    ["Active stance mode", state.demographicStanceFilter === "both" ? "Both" : state.demographicStanceFilter],
+  ]
+    .map(
+      ([label, value]) => `
+        <article class="metric-card compact-card">
+          <div class="metric-label">${label}</div>
+          <div class="metric-value">${typeof value === "number" ? formatNumber(value) : escapeHtml(value)}</div>
+        </article>
+      `
+    )
+    .join("");
+
+  els.overlapChart.innerHTML = renderOverlapChart(analysis);
+
+  els.overlapLegend.innerHTML = analysis.topicSets
+    .map((entry) => {
+      const counts = getTopicSupportOpposingCounts(entry.topic);
+      const totalUsers = counts.support + counts.opposing;
+      const activeUsers = entry.userSet.size;
+      return `
+        <article class="legend-card">
+          <div class="legend-title-row">
+            <strong>${escapeHtml(entry.topic.label)}</strong>
+            <span class="badge neutral">${formatNumber(activeUsers)} active users</span>
+          </div>
+          <div class="stance-meter">
+            <div class="stance-support" style="width:${totalUsers ? (counts.support / totalUsers) * 100 : 0}%"></div>
+            <div class="stance-opposing" style="width:${totalUsers ? (counts.opposing / totalUsers) * 100 : 0}%"></div>
+          </div>
+          <div class="detail-meta">
+            <span>${formatNumber(counts.support)} support</span>
+            <span>${formatNumber(counts.opposing)} opposing</span>
+            <span>${formatPercentFromCount(activeUsers, analysis.participantCount)} of participants</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  els.overlapTable.innerHTML = analysis.pairwise.length
+    ? `
+      <div class="overlap-table">
+        <div class="overlap-table-header">Topic pair</div>
+        <div class="overlap-table-header">Shared users</div>
+        <div class="overlap-table-header">% of participants</div>
+        ${analysis.pairwise
+      .map(
+        (pair) => `
+              <div class="overlap-cell">${escapeHtml(pair.leftTopic.label)} <span class="muted">vs</span> ${escapeHtml(
+          pair.rightTopic.label
+        )}</div>
+              <div class="overlap-cell">${formatNumber(pair.sharedUsers)}</div>
+              <div class="overlap-cell">${formatPercentFromCount(pair.sharedUsers, analysis.participantCount)}</div>
+            `
+      )
+      .join("")}
+      </div>
+    `
+    : '<div class="muted">No pairwise overlap is available for the current selection.</div>';
+
+  const stanceModeLabel =
+    state.demographicStanceFilter === "both"
+      ? "support and opposing users together"
+      : `${state.demographicStanceFilter} users only`;
+  els.demographicsNote.textContent = `Denominator: unique users who appear in at least one selected topic under ${stanceModeLabel}. A user keeps their existing per-topic dominant stance, so the same author can overlap across topics even when their stance changes from one topic to another.`;
 }
 
 function currentMonthFilter() {
@@ -264,8 +676,8 @@ function renderOverview() {
     <div class="quality-item">
       <strong>Topic coverage</strong>
       <p>${formatPercent(
-        bundle.topic_run_metadata.assigned_non_outlier_posts / bundle.topic_run_metadata.post_count
-      )} of retained posts were assigned to non-outlier topics.</p>
+    bundle.topic_run_metadata.assigned_non_outlier_posts / bundle.topic_run_metadata.post_count
+  )} of retained posts were assigned to non-outlier topics.</p>
     </div>
     <div class="quality-item">
       <strong>Labeling</strong>
@@ -273,11 +685,10 @@ function renderOverview() {
     </div>
     <div class="quality-item">
       <strong>Stance preview</strong>
-      <p>${
-        stanceReady
-          ? `${formatNumber(bundle.stance_preview_metadata.comment_count_analyzed || 0)} comments were grouped into support/opposition previews across ${bundle.stance_preview_metadata.topic_count_analyzed || 0} major topics.`
-          : "Stance preview outputs are not available yet. Topic exploration still works."
-      }</p>
+      <p>${stanceReady
+      ? `${formatNumber(bundle.stance_preview_metadata.comment_count_analyzed || 0)} comments were grouped into support/opposition previews across ${bundle.stance_preview_metadata.topic_count_analyzed || 0} major topics.`
+      : "Stance preview outputs are not available yet. Topic exploration still works."
+    }</p>
     </div>
   `;
 }
@@ -337,19 +748,18 @@ function renderTopicTree() {
             <div>
               <div class="major-topic-title">${escapeHtml(majorTopic.label)}</div>
               <div class="major-topic-meta">${formatPercent(majorTopic.topic_share)} of posts • ${formatNumber(
-                majorTopic.post_count
-              )} posts</div>
+        majorTopic.post_count
+      )} posts</div>
             </div>
             <span class="expand-indicator">${expanded ? "−" : "+"}</span>
           </button>
           <div class="topic-branch ${expanded ? "expanded" : ""}">
             ${majorTopic.children
-              .map((child) => {
-                const topic = getTopicById(child.topic_id);
-                return `
-                  <article class="topic-node ${
-                    Number(state.activeTopicId) === Number(child.topic_id) ? "active" : ""
-                  }" data-topic-id="${child.topic_id}">
+          .map((child) => {
+            const topic = getTopicById(child.topic_id);
+            return `
+                  <article class="topic-node ${Number(state.activeTopicId) === Number(child.topic_id) ? "active" : ""
+              }" data-topic-id="${child.topic_id}">
                     <div class="topic-node-header">
                       <div class="topic-node-title">${escapeHtml(child.label)}</div>
                       <span class="badge ${trendClass(child.trend_type)}">${child.trend_type}</span>
@@ -361,8 +771,8 @@ function renderTopicTree() {
                     </div>
                   </article>
                 `;
-              })
-              .join("")}
+          })
+          .join("")}
           </div>
         </section>
       `;
@@ -390,47 +800,67 @@ function renderTopicTree() {
   });
 }
 
-function polylinePoints(values, width, height, padding) {
-  const maxValue = Math.max(...values, 1);
-  const usableWidth = width - padding * 2;
-  const usableHeight = height - padding * 2;
-  return values
-    .map((value, index) => {
-      const x = padding + (usableWidth * index) / Math.max(values.length - 1, 1);
-      const y = padding + usableHeight - (usableHeight * value) / maxValue;
-      return `${x},${y}`;
-    })
-    .join(" ");
-}
-
 function renderTimeline(topic) {
   const timeline = topic.timeline;
-  if (!timeline || !timeline.post_counts?.length) {
-    return '<div class="timeline-empty">No monthly trend data available.</div>';
+  if (!timeline || !timeline.daily_post_counts?.length) {
+    return '<div class="timeline-empty">No daily trend data available.</div>';
   }
 
-  const width = 520;
-  const height = 220;
-  const padding = 24;
-  const points = polylinePoints(timeline.post_counts, width, height, padding);
-  const eventMarkers = (timeline.events || [])
-    .map((event) => {
-      const monthIndex = timeline.months.indexOf(event.month);
-      if (monthIndex < 0) return "";
-      const x = padding + ((width - padding * 2) * monthIndex) / Math.max(timeline.months.length - 1, 1);
+  const width = 620;
+  const height = 290;
+  const chartLeft = 28;
+  const chartRight = width - 24;
+  const chartTop = 18;
+  const axisY = 202;
+  const monthLabelY = 224;
+  const eventBaseY = 252;
+  const plotHeight = axisY - chartTop;
+  const values = timeline.daily_post_counts;
+  const maxValue = Math.max(...values, 1);
+  const step = (chartRight - chartLeft) / Math.max(values.length - 1, 1);
+  const barWidth = Math.max(1.5, Math.min(7, step * 0.82));
+  const bars = values
+    .map((value, index) => {
+      const x = chartLeft + step * index - barWidth / 2;
+      const barHeight = (plotHeight * value) / maxValue;
+      const y = axisY - barHeight;
+      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${Math.max(
+        barHeight,
+        value > 0 ? 1.5 : 0
+      ).toFixed(2)}" rx="1.5" class="trend-bar"></rect>`;
+    })
+    .join("");
+
+  const monthTicks = (timeline.day_axis || [])
+    .map((day, index, days) => {
+      const previousMonth = index > 0 ? days[index - 1].slice(0, 7) : null;
+      const currentMonth = day.slice(0, 7);
+      if (index !== 0 && currentMonth === previousMonth) {
+        return "";
+      }
+      const x = chartLeft + step * index;
       return `
-        <line x1="${x}" y1="${padding}" x2="${x}" y2="${height - padding}" class="event-line"></line>
-        <text x="${x + 6}" y="${padding + 10}" class="event-label">${escapeHtml(event.label)}</text>
+        <line x1="${x.toFixed(2)}" y1="${chartTop}" x2="${x.toFixed(2)}" y2="${axisY}" class="month-tick"></line>
+        <text x="${x.toFixed(2)}" y="${monthLabelY}" text-anchor="middle" class="axis-label">${escapeHtml(
+        formatMonthLabel(currentMonth)
+      )}</text>
       `;
     })
     .join("");
 
-  const axisLabels = timeline.months
-    .map((month, index) => {
-      const x = padding + ((width - padding * 2) * index) / Math.max(timeline.months.length - 1, 1);
-      return `<text x="${x}" y="${height - 6}" text-anchor="middle" class="axis-label">${escapeHtml(
-        month.slice(5)
-      )}</text>`;
+  const eventMarkers = (timeline.events || [])
+    .map((event, index) => {
+      const dayIndex = (timeline.day_axis || []).indexOf(event.date);
+      if (dayIndex < 0) return "";
+      const x = chartLeft + step * dayIndex;
+      const eventLabelY = eventBaseY + (index % 2) * 14;
+      return `
+        <line x1="${x.toFixed(2)}" y1="${chartTop}" x2="${x.toFixed(2)}" y2="${axisY}" class="event-line"></line>
+        <circle cx="${x.toFixed(2)}" cy="${axisY}" r="3.5" class="event-dot"></circle>
+        <text x="${x.toFixed(2)}" y="${eventLabelY}" text-anchor="start" transform="rotate(35 ${x.toFixed(
+        2
+      )} ${eventLabelY})" class="event-label">${escapeHtml(event.label)}</text>
+      `;
     })
     .join("");
 
@@ -438,20 +868,13 @@ function renderTimeline(topic) {
     <svg viewBox="0 0 ${width} ${height}" class="timeline-chart" role="img" aria-label="Topic frequency chart">
       <rect x="0" y="0" width="${width}" height="${height}" rx="18" class="chart-bg"></rect>
       ${[0.25, 0.5, 0.75].map((fraction) => {
-        const y = padding + (height - padding * 2) * fraction;
-        return `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" class="grid-line"></line>`;
-      }).join("")}
+    const y = chartTop + plotHeight * fraction;
+    return `<line x1="${chartLeft}" y1="${y}" x2="${chartRight}" y2="${y}" class="grid-line"></line>`;
+  }).join("")}
+      <line x1="${chartLeft}" y1="${axisY}" x2="${chartRight}" y2="${axisY}" class="axis-line"></line>
+      ${bars}
+      ${monthTicks}
       ${eventMarkers}
-      <polyline points="${points}" class="trend-line"></polyline>
-      ${timeline.post_counts
-        .map((value, index) => {
-          const x = padding + ((width - padding * 2) * index) / Math.max(timeline.months.length - 1, 1);
-          const maxValue = Math.max(...timeline.post_counts, 1);
-          const y = padding + (height - padding * 2) - ((height - padding * 2) * value) / maxValue;
-          return `<circle cx="${x}" cy="${y}" r="4" class="trend-point"></circle>`;
-        })
-        .join("")}
-      ${axisLabels}
     </svg>
   `;
 }
@@ -654,7 +1077,7 @@ function renderQaResult() {
         <div class="detail-subtitle">Answer</div>
         <div class="qa-meta">
           <span>Mode: ${escapeHtml(result.query_type)}</span>
-          <span>Model: ${escapeHtml(els.modelSelect.value)}</span>
+          <span>Model: ${escapeHtml(state.model)}</span>
           <span>Max similarity: ${Number(result.max_cosine_sim || 0).toFixed(4)}</span>
           <span>${result.no_answer_flag ? "Low-confidence route" : "Evidence-backed route"}</span>
         </div>
@@ -674,9 +1097,11 @@ function renderQaResult() {
 
 function render() {
   ensureValidActiveTopic();
+  ensureValidDemographicSelection();
   renderOverview();
   renderTopicTree();
   renderTopicDetail();
+  renderUserDemographics();
   renderPipelineStatus();
   renderQaResult();
 }
@@ -685,9 +1110,11 @@ async function loadBundle() {
   try {
     state.bundle = await apiFetch(`/api/bundle?ts=${Date.now()}`, { method: "GET" });
     state.expandedMajorTopics = new Set((state.bundle.topic_tree || []).slice(0, 2).map((node) => node.id));
+    ensureValidDemographicSelection();
   } catch (error) {
     state.bundle = null;
     state.pipelineLog = `Bundle load failed: ${error.message}`;
+    state.selectedDemographicTopics = [];
   }
 }
 
@@ -722,6 +1149,8 @@ async function submitQuery() {
     return;
   }
 
+  closeQueryTypeMenu();
+
   setQaBusy(true);
   els.qaStatusText.textContent = "Query in progress...";
   try {
@@ -730,7 +1159,7 @@ async function submitQuery() {
       body: JSON.stringify({
         question,
         lang: state.language,
-        model: els.modelSelect.value,
+        model: state.model,
         query_type: "auto",
       }),
     });
@@ -787,16 +1216,16 @@ async function runPipelineAction(button, endpoint, successLabel, rebuildBundleAf
       result.stderr || "(no stderr)",
       ...(rebuildResult
         ? [
-            "",
-            "Bundle rebuild:",
-            rebuildResult.ok ? "completed" : "failed",
-            "",
-            "BUNDLE STDOUT:",
-            rebuildResult.stdout || "(no stdout)",
-            "",
-            "BUNDLE STDERR:",
-            rebuildResult.stderr || "(no stderr)",
-          ]
+          "",
+          "Bundle rebuild:",
+          rebuildResult.ok ? "completed" : "failed",
+          "",
+          "BUNDLE STDOUT:",
+          rebuildResult.stdout || "(no stdout)",
+          "",
+          "BUNDLE STDERR:",
+          rebuildResult.stderr || "(no stderr)",
+        ]
         : []),
     ].join("\n");
     await refreshAppData();
@@ -826,9 +1255,27 @@ async function boot() {
     renderTopicTree();
   });
 
-  els.conversationInput.addEventListener("focus", openQueryTypeMenu);
-  els.conversationInput.addEventListener("click", openQueryTypeMenu);
-  els.conversationInput.addEventListener("input", validateConversationInput);
+  els.navItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      setActiveView(item.dataset.view);
+    });
+  });
+
+  els.stanceToggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.demographicStanceFilter = button.dataset.stanceFilter;
+      renderUserDemographics();
+    });
+  });
+
+  els.conversationInput.addEventListener("focus", maybeOpenQueryTypeMenu);
+  els.conversationInput.addEventListener("click", maybeOpenQueryTypeMenu);
+  els.conversationInput.addEventListener("input", () => {
+    validateConversationInput();
+    if (els.conversationInput.value.trim()) {
+      closeQueryTypeMenu();
+    }
+  });
   els.conversationInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -844,11 +1291,19 @@ async function boot() {
     }
   });
 
-  els.languageToggle.addEventListener("click", () => {
-    state.language = state.language === "en" ? "hi" : "en";
-    const hindiMode = state.language === "hi";
-    els.languageToggle.setAttribute("aria-pressed", String(hindiMode));
-    els.languageToggle.textContent = `Hindi Mode: ${hindiMode ? "On" : "Off"}`;
+  els.languageToggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      closeQueryTypeMenu();
+      state.language = button.dataset.language;
+      syncLanguageToggles();
+    });
+  });
+  els.modelToggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      closeQueryTypeMenu();
+      state.model = button.dataset.model;
+      syncModelToggles();
+    });
   });
 
   els.askButton.addEventListener("click", submitQuery);
@@ -868,6 +1323,9 @@ async function boot() {
   );
 
   validateConversationInput();
+  syncLanguageToggles();
+  syncModelToggles();
+  setActiveView(state.activeView);
   render();
 }
 

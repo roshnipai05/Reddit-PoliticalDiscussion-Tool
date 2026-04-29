@@ -1,0 +1,316 @@
+[
+  {
+    "id": "q01",
+    "type": "factual",
+    "answerable": true,
+    "question": "What was the most discussed political event in the subreddit during July 2024?",
+    "reference_answer": "The two most discussed events in July 2024 were the Trump assassination attempt on July 13 and Biden's decision to exit the 2024 presidential race on July 21, both of which generated a significant volume of posts and comments.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6474,
+    "retrieved_post_ids": [
+      "1emjioo",
+      "1ecyepo",
+      "1fk8wzw",
+      "1e3jutn",
+      "1h0zmar"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q02",
+    "type": "factual",
+    "answerable": true,
+    "question": "What flair categories were most commonly used for posts about the 2024 presidential election?",
+    "reference_answer": "Posts about the 2024 presidential election were most commonly flaired under categories related to US Elections, US Politics, and similar election-specific tags, reflecting the high volume of campaign and candidate-related discussion.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6861,
+    "retrieved_post_ids": [
+      "1gdb5q0",
+      "1fk8wzw",
+      "1dsz7ze"
+    ],
+    "groq_answer": "The most commonly used flair categories for posts about the 2024 presidential election were US Elections and US Politics.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q03",
+    "type": "factual",
+    "answerable": true,
+    "question": "How did users react to the Supreme Court's decision to overturn Chevron deference in June 2024?",
+    "reference_answer": "Users expressed significant concern about the overturning of Chevron deference, with many commenters arguing it would weaken federal regulatory agencies and shift power to the courts. Critics framed it as a major setback for environmental and consumer protections.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7841,
+    "retrieved_post_ids": [
+      "1fyl5dr",
+      "1elilyn",
+      "1dvmx1q",
+      "1giyzhc",
+      "1dug1yc"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q04",
+    "type": "factual",
+    "answerable": true,
+    "question": "Were there posts discussing third-party or independent candidates in the 2024 election?",
+    "reference_answer": "Yes, there were posts discussing third-party candidates, particularly focusing on the viability and impact of independent or minor-party candidates on the 2024 election outcome, with debate over whether such candidates could affect the major-party results.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.701,
+    "retrieved_post_ids": [
+      "1gywfz8",
+      "1hf979p",
+      "1e8y6t0",
+      "1dsz7ze",
+      "1f68kxd"
+    ],
+    "groq_answer": "Reddit users discussed the possibility of third-party candidates in the context of future elections, such as 2028, but there were also posts inquiring about the 2024 election. Although the posts about the 2024 election did not specifically focus on third-party or independent candidates, users did express curiosity about the lack of independent party candidates and the possibility of a third-party president. Additionally, a post asked about all the 2024 running campaigns, which could imply interest in candidates beyond the two main parties. However, the discussion of third-party or independent candidates was more prominent in the context of future elections.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q05",
+    "type": "factual",
+    "answerable": true,
+    "question": "What topics related to the economy were most discussed in the subreddit?",
+    "reference_answer": "Economic discussions centred around inflation, housing costs, wages, and the overall cost of living, with users frequently debating the effectiveness of administration economic policy and comparing conditions under different political leadership.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6649,
+    "retrieved_post_ids": [
+      "1fpj6x6",
+      "1gl26jc",
+      "1hnp4qj",
+      "1ginzbj",
+      "1eb5ipo"
+    ],
+    "groq_answer": "Reddit users discussed various topics related to the economy, including the impact of Trump-era policies on the current economy, the role of the economy in voting decisions, and general discussions about the economy in the context of US elections and politics. Some posts focused on the economy as a key talking point, while others explored specific aspects, such as the lingering effects of Trump-era policies. Overall, the economy was a significant topic of discussion, with users acknowledging its importance in shaping their voting decisions and the overall state of the country.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q06",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What do Reddit users in this community think about Biden's decision to withdraw from the 2024 presidential race?",
+    "reference_answer": "Opinions were divided. Many users expressed relief or support, arguing that Biden stepping aside was the right move for the Democratic Party's chances against Trump. A minority expressed frustration or felt the decision came too late. A common sentiment was cautious optimism about Kamala Harris as the replacement candidate.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7757,
+    "retrieved_post_ids": [
+      "1e7f3m1",
+      "1exgtwf",
+      "1e65dqz",
+      "1dwkccp",
+      "1ewivnn"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q07",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What are the main arguments users make for and against Kamala Harris as a presidential candidate?",
+    "reference_answer": "Arguments in favour of Harris included her prosecutorial background, her historic candidacy, and the view that she represented a meaningful contrast to Trump. Arguments against included concerns about her prior low polling numbers, questions about her policy clarity, and scepticism about whether she could consolidate enough swing-state support.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.8634,
+    "retrieved_post_ids": [
+      "1e8x1wy",
+      "1ec3e6f",
+      "1f5w04q",
+      "1gcrvet"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q08",
+    "type": "opinion",
+    "answerable": true,
+    "question": "How do users in this subreddit discuss the topic of immigration policy?",
+    "reference_answer": "Immigration discussions were contentious. Some users advocated for stricter border enforcement and linked immigration to economic concerns, while others emphasised humanitarian considerations and criticised restrictive policies. A recurring theme was debate over the political consequences of immigration as an election issue.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6798,
+    "retrieved_post_ids": [
+      "1ef4r81",
+      "1goyozk",
+      "1fcrz8x",
+      "1gwxmxn",
+      "1g9kk2a"
+    ],
+    "groq_answer": "Users in this subreddit discuss the topic of immigration policy by presenting various perspectives and potential solutions. Some users argue that stricter border enforcement is necessary, while others advocate for pathways to citizenship. A few users suggest that the current system is flawed and that the US should adopt a more open approach, similar to what existed during the time of the founding fathers. \n\nMany users emphasize the need to address the root causes of undocumented immigration, such as companies and individuals who facilitate it by offering jobs and housing to undocumented workers. They propose increasing penalties for hiring undocumented labor to encourage businesses to reform their practices and support a more formalized immigration process.\n\nSome users also highlight the historical context of US immigration policies, including the 1924 Immigration Act, which excluded certain groups based on race or nationality. Others note that anti-immigration views can be inconsistent and seemingly driven by various factors, including culture, religion, or politics.\n\nOverall, the discussion on immigration policy in this subreddit is characterized by a range of opinions and ideas, with users engaging in a debate about the best approach to addressing the complex issues surrounding immigration. Reddit users tend to view immigration as a multifaceted issue that requires a comprehensive solution, taking into account both border security and the needs of immigrants and the US economy.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q09",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What is the general sentiment toward the Republican Party and Donald Trump in this community?",
+    "reference_answer": "The general sentiment was predominantly critical. Users frequently expressed concern about Trump's policy positions, democratic norms, and character. However, some posts offered more neutral or analytical framings, and there were occasional users who defended Republican positions, particularly on economic and immigration policy.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7606,
+    "retrieved_post_ids": [
+      "1gelz1w",
+      "1el9m63",
+      "1gdxr1f",
+      "1eazic5"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q10",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What do users think about the role of media coverage in the 2024 election?",
+    "reference_answer": "Users were broadly critical of media coverage, with complaints spanning both mainstream and partisan outlets. Common criticisms included both-sidesism, sensationalism, and under-reporting of policy substance in favour of horserace coverage. Some users specifically criticised coverage of Biden's age while others argued Trump received insufficient scrutiny.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6996,
+    "retrieved_post_ids": [
+      "1fdmdx0",
+      "1ghc0xc",
+      "1gpiei2",
+      "1g6z3wj"
+    ],
+    "groq_answer": "Reddit users think that the media should fairly report on the 2024 election by providing accurate and unbiased information. They suggest that the press should report on what candidates actually say, verbatim, without interpreting or paraphrasing their statements. Users also believe that the media should not treat outright lies as valid arguments and should instead report on them as false. \n\nSome users are concerned about the role of social media in the election, with one user noting that hosts on social media are often entertainers rather than journalists, which can lead to a lack of scrutiny. Others think that social media will play an increasingly important role in electoral politics, with candidates pivoting towards online mediums over traditional TV-based mediums.\n\nUsers also emphasize the importance of transparency and accuracy in media coverage, suggesting that the media should show clips or transcribe quotes from candidates without editing or interpreting them. Additionally, users think that the media should not provide charitable characterizations of candidates' statements, but rather report on what they actually say.\n\nOverall, Reddit users believe that the media has a significant impact on the election and that fair and accurate reporting is essential for informing voters and holding candidates accountable.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q11",
+    "type": "opinion",
+    "answerable": true,
+    "question": "How did community discussion change after the Harris-Trump debate in September 2024?",
+    "reference_answer": "Following the Harris-Trump debate in September 2024, the majority of posts reflected a view that Harris had performed strongly and Trump had underperformed. Users pointed to specific exchanges on abortion, democracy, and the economy as moments where Harris was seen to have the upper hand. Sentiment in the community appeared more optimistic about Harris's prospects after the debate.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7331,
+    "retrieved_post_ids": [
+      "1fdhmzz",
+      "1ghc0xc",
+      "1fe0pfz",
+      "1gq7aj3"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q12",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What do users say about voter suppression or election integrity concerns?",
+    "reference_answer": "Users raised concerns about voter suppression through restrictive ID laws, polling access, and gerrymandering, primarily framing these as tactics used by Republican-controlled legislatures. There were also discussions about misinformation and the integrity of election administration, with most users expressing trust in the official processes while expressing concern about political interference.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7358,
+    "retrieved_post_ids": [
+      "1gp7xkv",
+      "1gldwrf",
+      "1eobx36"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q13",
+    "type": "factual",
+    "answerable": true,
+    "question": "Were there any posts discussing the Democratic National Convention in August 2024?",
+    "reference_answer": "Yes, the Democratic National Convention in August 2024 was discussed in the subreddit, with posts covering speaker highlights, the official nomination of Kamala Harris, and debate about the convention's effectiveness as a campaign moment.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.5959,
+    "retrieved_post_ids": [
+      "1e9j6g4",
+      "1ex2m0g",
+      "1gm2seb",
+      "1dve3g5"
+    ],
+    "groq_answer": "There was a post discussing the 2024 Democratic National Convention Night 2 on August 20, 2024. The post is titled \"2024 Democratic National Convention Night 2 8/20/24 Discussion\" and has a score of 1.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q14",
+    "type": "factual",
+    "answerable": false,
+    "question": "What did users say about the results of the 2024 US Senate races and which party gained control?",
+    "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.6988,
+    "retrieved_post_ids": [
+      "1emhqrk",
+      "1gkj8py",
+      "1godfju",
+      "1e0cmcw"
+    ],
+    "groq_answer": "Reddit users discussed the 2024 US Senate races, with some mentioning that the Democrats would have to win all the states Biden carried in 2020, plus 2 seats that are currently controlled by Republicans. They noted that there was a path for Democrats through Ohio and Montana, but it would be hard. \n\nHowever, as the results came in, users expressed disappointment and concern as the Democrats seemed to be losing key seats. One user mentioned that losing Ohio was \"terrible but not so shocking\" and that if they lost other states like Michigan, Wisconsin, Pennsylvania, or Arizona, they wouldn't have a counter against the Republican agenda.\n\nAnother user stated that with Bernie Moreno being called in Ohio, it \"pretty much guarantees the Republicans control of the Senate, potentially with an extra seat or two.\" This suggests that, according to the users, the Republican party gained control of the Senate in the 2024 elections.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q15",
+    "type": "factual",
+    "answerable": false,
+    "question": "What is the most upvoted post of all time on this subreddit, and what was it about?",
+    "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.4573,
+    "retrieved_post_ids": [
+      "1ecyepo",
+      "1fk8wzw",
+      "1eb9mpa",
+      "1gkc6o5",
+      "1fe09yq"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q16",
+    "type": "factual",
+    "answerable": false,
+    "question": "How many subreddit moderators are there and what are their usernames?",
+    "reference_answer": "The corpus does not contain sufficient information to answer this question.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.4515,
+    "retrieved_post_ids": [
+      "1f0fed7",
+      "1gn2ic7",
+      "1ep75fw",
+      "1eqiyw9",
+      "1futb4y"
+    ],
+    "groq_answer": "The corpus does not contain sufficient information to answer this question.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q17",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What do users think about NATO expansion and its role in the Russia-Ukraine war?",
+    "reference_answer": "Users discussing the Russia-Ukraine conflict generally expressed support for Ukraine and framed NATO as a defensive alliance rather than an aggressor. Criticism of Russia's invasion was dominant, with debate over the extent and nature of US military aid. Some users raised concerns about escalation risks while others argued for stronger support.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7967,
+    "retrieved_post_ids": [
+      "1gr0dng",
+      "1fwxddd",
+      "1he9jjq",
+      "1g9bcc7",
+      "1h653b3"
+    ],
+    "groq_answer": "Reddit users discuss the role of NATO in the Russia-Ukraine war, with some arguing that Russia's invasion of Ukraine was a result of NATO's expansion. However, others believe that Russia's actions are not justified and that NATO's expansion is not the primary cause of the conflict. \n\nOne user suggests that if the US were to turn neutral, Ukraine's plan would be to acquire sufficient weapons, not rely on support in talks, as hugs with Putin won't help. Another user thinks that Ukraine should work to build nukes, as this seems to be the only thing that keeps a country from getting attacked.\n\nSome users also discuss the US's role in NATO, with one user mentioning that the last defense spending bill included a provision that the US cannot leave NATO without congressional approval. However, another user notes that many scholars think this law may not hold up if brought before the Supreme Court.\n\nIn terms of NATO's expansion, users do not explicitly discuss the topic, but they do mention the strategic triangle of Russia, Iran, and China, and how these countries have imperialist aspirations. One user suggests that if only one of them made a move, NATO/Western countries would be able to support them, but a coordinated series of attacks would be more challenging to respond to.\n\nOverall, Reddit users seem to think that NATO plays a crucial role in the Russia-Ukraine war, and that the US's involvement in NATO is important for maintaining stability in the region. However, there are differing opinions on the effectiveness of NATO's expansion and the US's ability to leave the alliance.",
+    "gemini_answer": ""
+  },
+  {
+    "id": "q18",
+    "type": "opinion",
+    "answerable": true,
+    "question": "What do users say about the US healthcare system and potential policy reforms?",
+    "reference_answer": "Healthcare was a recurring topic with users frequently criticising the cost and accessibility of the US system. Discussions often compared it unfavourably to universal systems in other countries. Policy debates centred on expanding Medicare, the Affordable Care Act, and drug pricing, with most users expressing support for more comprehensive public coverage.",
+    "no_answer_flag": false,
+    "max_cosine_sim": 0.7061,
+    "retrieved_post_ids": [
+      "1esfolf",
+      "1hdcudc",
+      "1gdgw34",
+      "1eyvvf6",
+      "1f9j0gl"
+    ],
+    "groq_answer": "Reddit users express various concerns and opinions about the US healthcare system and potential policy reforms. Many users argue that the current system is flawed and prioritizes profits over people's health. Some commenters suggest that a single-payer system, such as \"Medicare for All,\" could be a solution, while others propose a public option or a multiplayer system.\n\nSeveral users criticize the idea of treating healthcare as a market-driven system, arguing that it fails to account for the needs of vulnerable populations. They also express skepticism about the ability of private insurance companies to provide adequate coverage, citing high costs and limited accessibility.\n\nSome commenters propose specific policy changes, such as increasing residency slots for physicians, removing regulations that favor employer-based insurance plans, or implementing a public option with income-based premiums. Others emphasize the need to reduce the influence of corporate money and lobbyists in the healthcare system.\n\nA few users mention the challenges of implementing universal healthcare, including the potential for a disastrous rollout, the impact on physician reimbursements, and the opposition from healthcare companies and lobbyists. Some commenters also note that many developed countries have achieved universal health insurance through multiplayer systems, which could be a more realistic and effective approach.\n\nOverall, Reddit users express a range of opinions and concerns about the US healthcare system and potential policy reforms, highlighting the complexity and challenges of addressing this issue.",
+    "gemini_answer": ""
+  }
+]
