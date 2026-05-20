@@ -13,14 +13,18 @@ The application is built around a few connected analysis features:
 
 - **Topic map:** groups posts into analyst-readable political issue areas and then further into broader major domains such as elections, institutions, economy, rights, foreign policy, and media narratives.
 <img src="assets\Topic-Map.jpg">
+
 - **Trend monitoring:** identifies whether a topic is persistent, trending, declining, or episodic across the July--December 2024 time window.
+  
 - **Stance preview:** approximates disagreement inside each topic by splitting comments into two discourse camps and summarising the dominant and opposing arguments.
 <img src="assets\Stance-Analysis.jpg">
+
 - **User demographics / participation overlap:** lets the user compare selected topics and inspect how much their participant bases overlap. This is useful for understanding whether the same repeat users are driving multiple discussions.
 <img src="assets\User-Demographics.jpg">
 
 - **Conversation QA:** supports question answering over the corpus through routed query modes, including focused, aggregate, comparison, and multi-hop questions.
-<img src="assets\Query-System.jpg"
+<img src="assets\Query-System.jpg">
+
 - **Multilingual access:** supports translation-based querying so the same English corpus can be explored through Hindi and other supported languages.
 
 ## How It Can Be Used as a Data Analysis Tool
