@@ -1,5 +1,3 @@
-<img src="assets\header.jpg" style="width:100%; object-fit:cover; border-radius:8px;">
-
 # Reddit Political Discussion Analysis
 
 This project is a local NLP-based analysis tool built on posts and comments from [`r/PoliticalDiscussion`](https://www.reddit.com/r/PoliticalDiscussion/). It is designed for analyst-style exploration rather than casual browsing: the application helps a user study what political topics dominated the subreddit, how those topics changed over time, where disagreement was concentrated, and how different issue areas connect through shared participation.
@@ -12,6 +10,7 @@ The application is built around a few connected analysis features:
 
 - **Corpus overview:** shows dataset-wide statistics such as post volume, user count, date range, and other aggregate properties of the collected Reddit data.
 <img src="assets\Agg-Stats.jpg">
+
 - **Topic map:** groups posts into analyst-readable political issue areas and then further into broader major domains such as elections, institutions, economy, rights, foreign policy, and media narratives.
 <img src="assets\Topic-Map.jpg">
 - **Trend monitoring:** identifies whether a topic is persistent, trending, declining, or episodic across the July--December 2024 time window.
